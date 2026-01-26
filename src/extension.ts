@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { PetAction, PetMcpServer } from './mcp-server';
+import { PetAction, PetMoodService } from './pet-mood-service';
 
 const IDLE_ACTIONS: PetAction[] = ['idle', 'stretch', 'dance', 'lookaround', 'shrug', 'wave', 'sleep', 'walk'];
 const CODING_ACTIONS: PetAction[] = [
@@ -26,11 +26,11 @@ export function activate(context: vscode.ExtensionContext) {
 	const isDevMode = context.extensionMode === vscode.ExtensionMode.Development;
 	vscode.commands.executeCommand('setContext', 'emotional-support.isDev', isDevMode);
 
-	const mcpServer = new PetMcpServer((payload) => {
+	const moodService = new PetMoodService((payload) => {
 		petViewProvider.setMood(payload);
 	});
 
-	context.subscriptions.push(mcpServer);
+	context.subscriptions.push(moodService);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(PetViewProvider.viewType, petViewProvider, {
 			webviewOptions: { retainContextWhenHidden: true }
@@ -45,7 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
 		);
 	}
 
-	mcpServer.start();
+	moodService.start();
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('emotional-support.setPetMood', async () => {

@@ -1,12 +1,12 @@
 # Emotional Support
 
-Emotional Support is a VS Code extension that opens a webview-based companion panel and exposes a minimal MCP server scaffold for future AI-driven reactions.
+Emotional Support is a VS Code extension that opens a webview-based companion panel and includes a lightweight pet mood service scaffold for future AI-driven reactions.
 
 ## Features
 
 - Webview panel with a placeholder pet UI and mood controls
 - Extension-to-webview messaging channel
-- MCP server stub ready to wire into @modelcontextprotocol/sdk
+- Pet mood service stub ready to wire into an automation or AI bridge
 
 ## Commands
 
@@ -24,4 +24,4 @@ Emotional Support is a VS Code extension that opens a webview-based companion pa
 
 ## Notes
 
-- The MCP server is a stub. Replace the placeholder logic in the `PetMcpServer` class with actual MCP SDK wiring.
+- The pet mood service is a stub. Replace the placeholder logic in the `PetMoodService` class with your integration of choice.

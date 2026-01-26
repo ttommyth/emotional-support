@@ -23,7 +23,7 @@ export type PetMoodPayload = {
 	message?: string;
 };
 
-export class PetMcpServer {
+export class PetMoodService {
 	private readonly onMoodChange: (payload: PetMoodPayload) => void;
 	private running = false;
 
@@ -36,8 +36,7 @@ export class PetMcpServer {
 			return;
 		}
 		this.running = true;
-		// Placeholder for MCP server start. Wire up @modelcontextprotocol/sdk here.
-		console.log('[PetMcpServer] Started (stub).');
+		console.log('[PetMoodService] Started.');
 	}
 
 	public stop() {
@@ -45,7 +44,7 @@ export class PetMcpServer {
 			return;
 		}
 		this.running = false;
-		console.log('[PetMcpServer] Stopped (stub).');
+		console.log('[PetMoodService] Stopped.');
 	}
 
 	public dispose() {
