@@ -2,6 +2,10 @@
   "name": "emotional-support",
   "displayName": "Emotional Support",
   "description": "Emotional Support companion panel for VS Code-based IDEs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ttommyth/emotional-support.git"
+  },
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.105.0"
