@@ -4,7 +4,7 @@
   "description": "Emotional Support companion panel for VS Code-based IDEs",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "Other"
@@ -44,7 +44,7 @@
     "commands": [
       {
         "command": "emotional-support.setPetMood",
-        "title": "Cycle Emotional Support Mood (Demo)"
+        "title": "Emotional Support: Cycle Emotional Support Mood (Demo)"
       }
       ,
       {
@@ -85,7 +85,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.108.1",
+    "@types/vscode": "^1.105.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "typescript-eslint": "^8.52.0",
