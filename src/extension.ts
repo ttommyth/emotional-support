@@ -117,6 +117,10 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		this.view?.webview.postMessage({ command: 'SET_AUTOPILOT', enabled });
 	}
 
+	public forceMove(target: 'front' | 'left' | 'right') {
+		this.view?.webview.postMessage({ command: 'FORCE_MOVE', target });
+	}
+
 	private getHtmlForWebview(webview: vscode.Webview) {
 		const distPath = vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist');
 		const indexPath = vscode.Uri.joinPath(distPath, 'index.html');
@@ -201,6 +205,17 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						return;
 					}
 					this.petViewProvider.setAutopilot(message.enabled);
+					break;
+				}
+				case 'FORCE_MOVE': {
+					if (message?.target !== 'front' && message?.target !== 'left' && message?.target !== 'right') {
+						return;
+					}
+					if (!this.petViewProvider.isReady()) {
+						vscode.window.showInformationMessage('Open the Emotional Support view to control the robot.');
+						return;
+					}
+					this.petViewProvider.forceMove(message.target);
 					break;
 				}
 				default:
@@ -309,6 +324,14 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 	<div class="section">
 		<button id="autopilot-toggle" class="btn btn-primary" type="button">Autopilot: On</button>
 	</div>
+	<div class="section">
+		<h4>Camera peeks</h4>
+		<div class="btn-group">
+			<button class="btn" data-move="left" type="button">Peek Left</button>
+			<button class="btn" data-move="front" type="button">Peek Front</button>
+			<button class="btn" data-move="right" type="button">Peek Right</button>
+		</div>
+	</div>
 	<div class="grid">${buttons}</div>
 	<p class="hint">Open the Emotional Support view to see the action.</p>
 	<script nonce="${nonce}">
@@ -338,6 +361,15 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 					return;
 				}
 				vscode.postMessage({ command: 'FORCE_ACTION', action });
+			});
+		});
+		document.querySelectorAll('[data-move]').forEach((button) => {
+			button.addEventListener('click', () => {
+				const target = button.getAttribute('data-move');
+				if (!target) {
+					return;
+				}
+				vscode.postMessage({ command: 'FORCE_MOVE', target });
 			});
 		});
 	</script>

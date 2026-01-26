@@ -28,6 +28,7 @@ export type RobotActionName =
 	| 'dance'
 	| 'lookaround'
 	| 'shrug'
+	| 'peek'
 	| 'knocked';
 
 export type RobotActionContext = {
@@ -35,6 +36,7 @@ export type RobotActionContext = {
 	props: RobotProps;
 	headGroup: THREE.Object3D;
 	robot: THREE.Object3D;
+	camera: THREE.Camera;
 };
 
 export type RobotActionDefinition = {

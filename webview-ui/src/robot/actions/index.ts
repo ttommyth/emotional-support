@@ -17,6 +17,7 @@ import { success } from './success';
 import { thinking } from './thinking';
 import { walk } from './walk';
 import { wave } from './wave';
+import { peek } from './peek';
 
 export const robotActions: RobotActionMap = {
 	idle,
@@ -36,7 +37,8 @@ export const robotActions: RobotActionMap = {
 	dance,
 	lookaround,
 	shrug,
-	knocked
+	knocked,
+	peek
 };
 
 export const codingActions = [

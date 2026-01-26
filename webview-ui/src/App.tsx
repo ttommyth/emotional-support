@@ -196,8 +196,8 @@ export default function App() {
 		const robotSpeed = 5;
 		const moveBounds = { x: 10, zNear: 2, zRange: 6 };
 		const peekTargets = [
-			new THREE.Vector3(-5.2, -0.4, 8.5),
-			new THREE.Vector3(5.2, -0.4, 8.5),
+			new THREE.Vector3(-7, -0.4, 8.5),
+			new THREE.Vector3(7, -0.4, 8.5),
 			new THREE.Vector3(0, -1.2, 9.2)
 		];
 
@@ -286,8 +286,9 @@ export default function App() {
 					robot.position.copy(moveTarget);
 					if (robot.position.z > 8) {
 						aiState = 'PERFORMING';
-						currentAction = 'wave';
-						aiTimer = 3;
+						const isSidePeek = Math.abs(robot.position.x) > moveBounds.x * 0.2;
+						currentAction = isSidePeek ? 'peek' : 'wave';
+						aiTimer = isSidePeek ? 3.6 : 3;
 						const targetRot = 0;
 						let rotDiff = targetRot - robot.rotation.y;
 						while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
@@ -325,7 +326,8 @@ export default function App() {
 			targets,
 			props,
 			headGroup,
-			robot
+			robot,
+			camera
 		};
 
 		const clock = new THREE.Clock();
@@ -367,6 +369,20 @@ export default function App() {
 					aiState = 'IDLE';
 					aiTimer = 0;
 				}
+				return;
+			}
+			if (message?.command === 'FORCE_MOVE' && typeof message?.target === 'string') {
+				const targetIndex = message.target === 'left' ? 0 : message.target === 'right' ? 1 : 2;
+				const target = peekTargets[targetIndex];
+				if (!target) {
+					return;
+				}
+				isAutoMode = true;
+				aiState = 'MOVING';
+				aiTimer = 4;
+				moveTarget.copy(target);
+				setRobotAction('walk');
+				return;
 			}
 		};
 		window.addEventListener('message', onMessage);
@@ -447,8 +463,8 @@ export default function App() {
 				moveBounds.zRange = 6 * scaleFactor;
 				moveBounds.zNear = 2 + (scaleFactor - 1) * 0.6;
 
-				peekTargets[0].set(-0.52 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
-				peekTargets[1].set(0.52 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
+				peekTargets[0].set(-0.7 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
+				peekTargets[1].set(0.7 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
 				peekTargets[2].set(0, -1.2, 9.2 + moveBounds.zNear * 0.6);
 			});
 		};
