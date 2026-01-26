@@ -2,7 +2,21 @@
 .vscode-test/**
 out/**
 node_modules/**
+webview-ui/node_modules/**
+webview-ui/src/**
+webview-ui/public/**
+webview-ui/.vscode/**
+webview-ui/.cache/**
+webview-ui/.turbo/**
 src/**
+.git/**
+.github/**
+.cursor/**
+.history/**
+.notes/**
+**/__tests__/**
+**/*.spec.*
+**/*.test.*
 .gitignore
 .yarnrc
 esbuild.js
@@ -12,3 +26,4 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+!webview-ui/dist/**
