@@ -1,6 +1,28 @@
 import { useEffect } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import {
+	AmbientLight,
+	CapsuleGeometry,
+	CircleGeometry,
+	Clock,
+	Color,
+	CylinderGeometry,
+	DirectionalLight,
+	Fog,
+	Group,
+	MathUtils,
+	Mesh,
+	MeshBasicMaterial,
+	MeshLambertMaterial,
+	Object3D,
+	PCFSoftShadowMap,
+	PerspectiveCamera,
+	PlaneGeometry,
+	Scene,
+	ShadowMaterial,
+	SphereGeometry,
+	Vector3,
+	WebGLRenderer
+} from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry';
 import { idleFillerActions, robotActions } from './robot/actions';
 import { getEyeColor } from './robot/actions/eyes';
@@ -18,33 +40,27 @@ export default function App() {
 		}
 		const containerEl = container;
 
-		const scene = new THREE.Scene();
+		const scene = new Scene();
 		const computedStyles = getComputedStyle(document.body);
 		const themeBackground = computedStyles.getPropertyValue('--vscode-editor-background').trim() || '#1e1e1e';
-		const backgroundColor = new THREE.Color(themeBackground);
+		const backgroundColor = new Color(themeBackground);
 		scene.background = backgroundColor;
-		scene.fog = new THREE.Fog(backgroundColor, 14, 55);
+		scene.fog = new Fog(backgroundColor, 14, 55);
 
-		const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+		const camera = new PerspectiveCamera(45, 1, 0.1, 1000);
 		camera.position.set(0, 3.6, 18);
 
-		const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+		const renderer = new WebGLRenderer({ antialias: true, alpha: true });
 		renderer.setPixelRatio(window.devicePixelRatio);
 		renderer.shadowMap.enabled = true;
-		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+		renderer.shadowMap.type = PCFSoftShadowMap;
 		containerEl.appendChild(renderer.domElement);
+		camera.lookAt(0, 2, 0);
 
-		const controls = new OrbitControls(camera, renderer.domElement);
-		controls.enableRotate = false;
-		controls.enableZoom = false;
-		controls.enablePan = false;
-		controls.target.set(0, 2, 0);
-		controls.update();
-
-		const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+		const ambientLight = new AmbientLight(0xffffff, 0.6);
 		scene.add(ambientLight);
 
-		const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+		const dirLight = new DirectionalLight(0xffffff, 1);
 		dirLight.position.set(5, 15, 10);
 		dirLight.castShadow = true;
 		dirLight.shadow.mapSize.width = 2048;
@@ -56,9 +72,9 @@ export default function App() {
 		dirLight.shadow.camera.bottom = -20;
 		scene.add(dirLight);
 
-		const planeGeometry = new THREE.PlaneGeometry(200, 200);
-		const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.1, color: 0x000000 });
-		const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+		const planeGeometry = new PlaneGeometry(200, 200);
+		const planeMaterial = new ShadowMaterial({ opacity: 0.1, color: 0x000000 });
+		const plane = new Mesh(planeGeometry, planeMaterial);
 		plane.rotation.x = -Math.PI / 2;
 		plane.position.y = -4.8;
 		scene.add(plane);
@@ -75,48 +91,48 @@ export default function App() {
 			eyePurple: 0xa29bfe
 		};
 
-		const matWhite = new THREE.MeshLambertMaterial({ color: colors.white });
-		const matOrange = new THREE.MeshLambertMaterial({ color: colors.orange });
-		const matDark = new THREE.MeshLambertMaterial({ color: colors.darkGray });
-		const matMetal = new THREE.MeshLambertMaterial({ color: colors.metal });
-		const matEye = new THREE.MeshBasicMaterial({ color: colors.eyeCyan });
+		const matWhite = new MeshLambertMaterial({ color: colors.white });
+		const matOrange = new MeshLambertMaterial({ color: colors.orange });
+		const matDark = new MeshLambertMaterial({ color: colors.darkGray });
+		const matMetal = new MeshLambertMaterial({ color: colors.metal });
+		const matEye = new MeshBasicMaterial({ color: colors.eyeCyan });
 
-		const robot = new THREE.Group();
+		const robot = new Group();
 		robot.position.set(0, -0.6, 2.5);
 		scene.add(robot);
-		const bodyPivot = new THREE.Group();
+		const bodyPivot = new Group();
 		robot.add(bodyPivot);
 
-		const torso = new THREE.Mesh(new RoundedBoxGeometry(3.5, 4.5, 2.5, 4, 0.5), matWhite);
+		const torso = new Mesh(new RoundedBoxGeometry(3.5, 4.5, 2.5, 4, 0.5), matWhite);
 		torso.castShadow = true;
 		bodyPivot.add(torso);
 
-		const chestPlate = new THREE.Mesh(new RoundedBoxGeometry(2, 1.4, 0.2, 4, 0.1), matOrange);
+		const chestPlate = new Mesh(new RoundedBoxGeometry(2, 1.4, 0.2, 4, 0.1), matOrange);
 		chestPlate.position.set(0, 1, 1.3);
 		chestPlate.castShadow = true;
 		bodyPivot.add(chestPlate);
 
-		const headGroup = new THREE.Group();
+		const headGroup = new Group();
 		headGroup.position.set(0, 3.5, 0);
 		bodyPivot.add(headGroup);
 
-		const headMesh = new THREE.Mesh(new RoundedBoxGeometry(5, 4, 3.5, 4, 0.2), matWhite);
+		const headMesh = new Mesh(new RoundedBoxGeometry(5, 4, 3.5, 4, 0.2), matWhite);
 		headMesh.castShadow = true;
 		headGroup.add(headMesh);
 
-		const visor = new THREE.Mesh(new RoundedBoxGeometry(4, 2.2, 0.5, 4, 0.1), matDark);
+		const visor = new Mesh(new RoundedBoxGeometry(4, 2.2, 0.5, 4, 0.1), matDark);
 		visor.position.set(0, 0, 1.8);
 		headGroup.add(visor);
 
-		const leftEye = new THREE.Mesh(new THREE.CircleGeometry(0.4, 32), matEye);
+		const leftEye = new Mesh(new CircleGeometry(0.4, 32), matEye);
 		leftEye.position.set(-1, 0, 2.1);
 		headGroup.add(leftEye);
 		const rightEye = leftEye.clone();
 		rightEye.position.set(1, 0, 2.1);
 		headGroup.add(rightEye);
 
-		const earGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.5, 32);
-		const leftEar = new THREE.Mesh(earGeo, matOrange);
+		const earGeo = new CylinderGeometry(0.6, 0.6, 0.5, 32);
+		const leftEar = new Mesh(earGeo, matOrange);
 		leftEar.rotation.z = Math.PI / 2;
 		leftEar.position.set(-2.8, 0, 0);
 		headGroup.add(leftEar);
@@ -124,27 +140,27 @@ export default function App() {
 		rightEar.position.set(2.8, 0, 0);
 		headGroup.add(rightEar);
 
-		const antennaStem = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.3, 1, 16), matMetal);
+		const antennaStem = new Mesh(new CylinderGeometry(0.1, 0.3, 1, 16), matMetal);
 		antennaStem.position.set(0, 2.5, 0);
 		headGroup.add(antennaStem);
-		const antennaBall = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), matOrange);
+		const antennaBall = new Mesh(new SphereGeometry(0.4, 16, 16), matOrange);
 		antennaBall.position.set(0, 3, 0);
 		headGroup.add(antennaBall);
 
 		function createLimb(x: number, y: number, isArm = false) {
-			const group = new THREE.Group();
+			const group = new Group();
 			group.position.set(x, y, 0);
-			const limbMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.6, 2, 4, 8), isArm ? matMetal : matDark);
+			const limbMesh = new Mesh(new CapsuleGeometry(0.6, 2, 4, 8), isArm ? matMetal : matDark);
 			limbMesh.position.y = -1;
 			limbMesh.castShadow = true;
 			group.add(limbMesh);
 			if (isArm) {
-				const hand = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), matWhite);
+				const hand = new Mesh(new SphereGeometry(0.8, 16, 16), matWhite);
 				hand.position.y = -2.2;
 				hand.castShadow = true;
 				group.add(hand);
 			} else {
-				const foot = new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.8, 1.8, 4, 0.2), matWhite);
+				const foot = new Mesh(new RoundedBoxGeometry(1.2, 0.8, 1.8, 4, 0.2), matWhite);
 				foot.position.set(0, -2, 0.5);
 				foot.castShadow = true;
 				group.add(foot);
@@ -164,12 +180,12 @@ export default function App() {
 		const props = createRobotProps({ scene, bodyPivot });
 
 		const targets: RobotTargets = {
-			body: { pos: new THREE.Vector3(), rot: new THREE.Vector3() },
-			head: { pos: new THREE.Vector3(0, 3.5, 0), rot: new THREE.Vector3() },
-			leftArm: { pos: new THREE.Vector3(-2.2, 1.5, 0), rot: new THREE.Vector3() },
-			rightArm: { pos: new THREE.Vector3(2.2, 1.5, 0), rot: new THREE.Vector3() },
-			leftLeg: { rot: new THREE.Vector3() },
-			rightLeg: { rot: new THREE.Vector3() }
+			body: { pos: new Vector3(), rot: new Vector3() },
+			head: { pos: new Vector3(0, 3.5, 0), rot: new Vector3() },
+			leftArm: { pos: new Vector3(-2.2, 1.5, 0), rot: new Vector3() },
+			rightArm: { pos: new Vector3(2.2, 1.5, 0), rot: new Vector3() },
+			leftLeg: { rot: new Vector3() },
+			rightLeg: { rot: new Vector3() }
 		};
 
 		function resetTargets() {
@@ -193,16 +209,16 @@ export default function App() {
 		let mcpRequestedAction: RobotActionName | undefined;
 		let mcpDurationTimer = 0;
 		let mcpTimeoutId = 0;
-		const moveTarget = new THREE.Vector3();
-		const forwardDir = new THREE.Vector3(0, 0, 1);
-		const toCameraDir = new THREE.Vector3();
-		const yAxis = new THREE.Vector3(0, 1, 0);
+		const moveTarget = new Vector3();
+		const forwardDir = new Vector3(0, 0, 1);
+		const toCameraDir = new Vector3();
+		const yAxis = new Vector3(0, 1, 0);
 		const robotSpeed = 5;
 		const moveBounds = { x: 10, zNear: 2, zRange: 6 };
 		const peekTargets = [
-			new THREE.Vector3(-7, -0.4, 8.5),
-			new THREE.Vector3(7, -0.4, 8.5),
-			new THREE.Vector3(0, -1.2, 9.2)
+			new Vector3(-7, -0.4, 8.5),
+			new Vector3(7, -0.4, 8.5),
+			new Vector3(0, -1.2, 9.2)
 		];
 
 		function getFacingDot() {
@@ -296,7 +312,7 @@ export default function App() {
 					}
 				}
 			} else if (aiState === 'MOVING') {
-				const direction = new THREE.Vector3().subVectors(moveTarget, robot.position);
+				const direction = new Vector3().subVectors(moveTarget, robot.position);
 				const dist = direction.length();
 
 				if (dist < 0.2) {
@@ -347,7 +363,7 @@ export default function App() {
 			camera
 		};
 
-		const clock = new THREE.Clock();
+		const clock = new Clock();
 		let isBlinking = false;
 		let blinkTimer = 0;
 		let timeSinceLastBlink = 0;
@@ -438,11 +454,11 @@ export default function App() {
 			robotActions[currentAction].update?.(delta, time, actionContext);
 
 			const f = 0.1;
-			const lerpV = (c: THREE.Vector3, t: THREE.Vector3) => c.lerp(t, f);
-			const lerpR = (obj: THREE.Object3D, t: THREE.Vector3) => {
-				obj.rotation.x = THREE.MathUtils.lerp(obj.rotation.x, t.x, f);
-				obj.rotation.y = THREE.MathUtils.lerp(obj.rotation.y, t.y, f);
-				obj.rotation.z = THREE.MathUtils.lerp(obj.rotation.z, t.z, f);
+			const lerpV = (c: Vector3, t: Vector3) => c.lerp(t, f);
+			const lerpR = (obj: Object3D, t: Vector3) => {
+				obj.rotation.x = MathUtils.lerp(obj.rotation.x, t.x, f);
+				obj.rotation.y = MathUtils.lerp(obj.rotation.y, t.y, f);
+				obj.rotation.z = MathUtils.lerp(obj.rotation.z, t.z, f);
 			};
 
 			lerpV(bodyPivot.position, targets.body.pos);
@@ -472,16 +488,15 @@ export default function App() {
 					targetScale = blinkTimer / blinkDuration < 0.5 ? 0.1 : 1;
 					if (blinkTimer >= blinkDuration) isBlinking = false;
 				}
-				leftEye.scale.y = THREE.MathUtils.lerp(leftEye.scale.y, targetScale, 0.5);
-				rightEye.scale.y = THREE.MathUtils.lerp(rightEye.scale.y, targetScale, 0.5);
+				leftEye.scale.y = MathUtils.lerp(leftEye.scale.y, targetScale, 0.5);
+				rightEye.scale.y = MathUtils.lerp(rightEye.scale.y, targetScale, 0.5);
 			} else {
 				const s = currentAction === 'sleep' ? 0.1 : 1;
-				leftEye.scale.y = THREE.MathUtils.lerp(leftEye.scale.y, s, 0.1);
-				rightEye.scale.y = THREE.MathUtils.lerp(rightEye.scale.y, s, 0.1);
+				leftEye.scale.y = MathUtils.lerp(leftEye.scale.y, s, 0.1);
+				rightEye.scale.y = MathUtils.lerp(rightEye.scale.y, s, 0.1);
 			}
 
 
-			controls.update();
 			renderer.render(scene, camera);
 		}
 
