@@ -2,12 +2,20 @@ export type PetAction =
 	| 'idle'
 	| 'thinking'
 	| 'coding'
+	| 'debugging'
+	| 'reviewing'
+	| 'refactoring'
+	| 'testing'
 	| 'reading'
 	| 'success'
 	| 'error'
 	| 'sleep'
 	| 'walk'
 	| 'wave'
+	| 'stretch'
+	| 'dance'
+	| 'lookaround'
+	| 'shrug'
 	| 'knocked';
 
 export type PetMoodPayload = {

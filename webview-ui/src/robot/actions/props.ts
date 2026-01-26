@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { createCodingProp } from './coding';
+import { createDebuggingProp } from './debugging';
+import { createReviewingProp } from './reviewing';
+import { createRefactoringProp } from './refactoring';
+import { createTestingProp } from './testing';
 import { createReadingProp } from './reading';
 import { createThinkingProp } from './thinking';
 import { createSuccessProp } from './success';
@@ -14,6 +18,10 @@ export type PropState = {
 
 export type RobotProps = {
 	coding: PropState;
+	debugging: PropState;
+	reviewing: PropState;
+	refactoring: PropState;
+	testing: PropState;
 	reading: PropState;
 	thinking: PropState;
 	success: PropState;
@@ -29,6 +37,10 @@ export type CreatePropsInput = {
 export function createRobotProps({ scene, bodyPivot }: CreatePropsInput): RobotProps {
 	return {
 		coding: createCodingProp(scene, bodyPivot),
+		debugging: createDebuggingProp(scene, bodyPivot),
+		reviewing: createReviewingProp(scene, bodyPivot),
+		refactoring: createRefactoringProp(scene, bodyPivot),
+		testing: createTestingProp(scene, bodyPivot),
 		reading: createReadingProp(scene, bodyPivot),
 		thinking: createThinkingProp(scene, bodyPivot),
 		success: createSuccessProp(scene, bodyPivot),

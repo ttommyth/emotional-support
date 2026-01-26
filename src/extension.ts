@@ -4,18 +4,20 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { PetAction, PetMcpServer } from './mcp-server';
 
-const PET_ACTIONS: PetAction[] = [
-	'idle',
+const IDLE_ACTIONS: PetAction[] = ['idle', 'stretch', 'dance', 'lookaround', 'shrug', 'wave', 'sleep', 'walk'];
+const CODING_ACTIONS: PetAction[] = [
 	'thinking',
 	'coding',
+	'debugging',
+	'reviewing',
+	'refactoring',
+	'testing',
 	'reading',
 	'success',
-	'error',
-	'sleep',
-	'walk',
-	'wave',
-	'knocked'
+	'error'
 ];
+const SPECIAL_ACTIONS: PetAction[] = ['knocked'];
+const PET_ACTIONS: PetAction[] = [...IDLE_ACTIONS, ...CODING_ACTIONS, ...SPECIAL_ACTIONS];
 
 const isPetAction = (value: string): value is PetAction => PET_ACTIONS.includes(value as PetAction);
 
@@ -214,10 +216,21 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 			`style-src ${webview.cspSource} 'unsafe-inline'`,
 			`script-src 'nonce-${nonce}'`
 		].join('; ');
-		const buttons = PET_ACTIONS.map((action) => {
-			const label = `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
-			return `<button class="btn" data-action="${action}">${label}</button>`;
-		}).join('');
+		const renderButtons = (actions: PetAction[]) =>
+			actions
+				.map((action) => {
+					const label = `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
+					return `<button class="btn" data-action="${action}">${label}</button>`;
+				})
+				.join('');
+		const buttons = `
+			<h4>Idle filler</h4>
+			<div class="btn-group">${renderButtons(IDLE_ACTIONS)}</div>
+			<h4>Coding related</h4>
+			<div class="btn-group">${renderButtons(CODING_ACTIONS)}</div>
+			<h4>Special</h4>
+			<div class="btn-group">${renderButtons(SPECIAL_ACTIONS)}</div>
+		`;
 
 		return `<!DOCTYPE html>
 <html lang="en">
@@ -246,7 +259,17 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 			font-size: 12px;
 			color: var(--vscode-descriptionForeground);
 		}
+		h4 {
+			margin: 8px 0;
+			font-size: 12px;
+			color: var(--vscode-descriptionForeground);
+		}
 		.grid {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.btn-group {
 			display: grid;
 			grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
 			gap: 8px;

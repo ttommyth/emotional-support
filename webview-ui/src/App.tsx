@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry';
-import { robotActions } from './robot/actions';
+import { idleFillerActions, robotActions } from './robot/actions';
 import { getEyeColor } from './robot/actions/eyes';
 import { createRobotProps, updateProps } from './robot/actions/props';
 import type { RobotActionContext, RobotActionName, RobotTargets } from './robot/types';
@@ -190,6 +190,9 @@ export default function App() {
 		let aiState = 'IDLE';
 		let aiTimer = 0;
 		const moveTarget = new THREE.Vector3();
+		const forwardDir = new THREE.Vector3(0, 0, 1);
+		const toCameraDir = new THREE.Vector3();
+		const yAxis = new THREE.Vector3(0, 1, 0);
 		const robotSpeed = 5;
 		const moveBounds = { x: 10, zNear: 2, zRange: 6 };
 		const peekTargets = [
@@ -197,6 +200,14 @@ export default function App() {
 			new THREE.Vector3(5.2, -0.4, 8.5),
 			new THREE.Vector3(0, -1.2, 9.2)
 		];
+
+		function getFacingDot() {
+			forwardDir.set(0, 0, 1).applyAxisAngle(yAxis, robot.rotation.y);
+			toCameraDir.subVectors(camera.position, robot.position).setY(0);
+			if (toCameraDir.lengthSq() < 0.0001) return 1;
+			toCameraDir.normalize();
+			return forwardDir.dot(toCameraDir);
+		}
 
 		function createRipple(x: number, y: number) {
 			const ripple = document.createElement('div');
@@ -238,7 +249,15 @@ export default function App() {
 			if (aiState === 'IDLE') {
 				if (aiTimer <= 0) {
 					const r = Math.random();
-					if (r < 0.55) {
+					const facingDot = getFacingDot();
+					const isFacingAwayOrSide = facingDot < 0.2;
+					let moveChance = 0.55;
+					let performChance = 0.25;
+					if (isFacingAwayOrSide) {
+						moveChance = 0.7;
+						performChance = 0.18;
+					}
+					if (r < moveChance) {
 						aiState = 'MOVING';
 						moveTarget.set(
 							(Math.random() - 0.5) * moveBounds.x,
@@ -246,8 +265,8 @@ export default function App() {
 							(Math.random() - 0.5) * moveBounds.zRange + moveBounds.zNear
 						);
 						currentAction = 'walk';
-					} else if (r < 0.8) {
-						const acts: RobotActionName[] = ['thinking', 'coding', 'reading', 'success', 'idle'];
+					} else if (r < moveChance + performChance) {
+						const acts = idleFillerActions;
 						currentAction = acts[Math.floor(Math.random() * acts.length)];
 						aiState = 'PERFORMING';
 						aiTimer = 3 + Math.random() * 4;
@@ -281,7 +300,12 @@ export default function App() {
 					}
 				} else {
 					direction.normalize();
-					robot.position.addScaledVector(direction, robotSpeed * delta);
+					toCameraDir.subVectors(camera.position, robot.position).setY(0);
+					const towardCamera = toCameraDir.lengthSq() > 0.0001
+						? direction.dot(toCameraDir.normalize())
+						: 0;
+					const speedScale = towardCamera > 0.2 ? 0.75 : towardCamera < -0.2 ? 1.15 : 1;
+					robot.position.addScaledVector(direction, robotSpeed * speedScale * delta);
 					const targetRot = Math.atan2(direction.x, direction.z);
 					let rotDiff = targetRot - robot.rotation.y;
 					while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
