@@ -30,8 +30,8 @@ export function createRobotProps({ scene, bodyPivot }: CreatePropsInput): RobotP
 	return {
 		coding: createCodingProp(scene, bodyPivot),
 		reading: createReadingProp(scene, bodyPivot),
-		thinking: createThinkingProp(scene),
-		success: createSuccessProp(scene),
+		thinking: createThinkingProp(scene, bodyPivot),
+		success: createSuccessProp(scene, bodyPivot),
 		zParticles: createSleepParticles(scene)
 	};
 }

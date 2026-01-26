@@ -1,7 +1,17 @@
-export type PetMood = 'idle' | 'thinking' | 'coding' | 'reading' | 'success' | 'error' | 'sleep';
+export type PetAction =
+	| 'idle'
+	| 'thinking'
+	| 'coding'
+	| 'reading'
+	| 'success'
+	| 'error'
+	| 'sleep'
+	| 'walk'
+	| 'wave'
+	| 'knocked';
 
 export type PetMoodPayload = {
-	mood: PetMood;
+	mood: PetAction;
 	message?: string;
 };
 

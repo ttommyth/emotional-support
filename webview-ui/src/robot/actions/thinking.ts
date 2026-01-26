@@ -21,26 +21,41 @@ export const thinking: RobotActionDefinition = {
 	}
 };
 
-export function createThinkingProp(scene: THREE.Scene): PropState {
-	const matPropGold = new THREE.MeshPhongMaterial({ color: 0xfdcb6e, shininess: 100 });
+export function createThinkingProp(scene: THREE.Scene, bodyPivot: THREE.Object3D): PropState {
+	const matGlass = new THREE.MeshStandardMaterial({
+		color: 0xfef9c3,
+		emissive: 0xfff3b0,
+		emissiveIntensity: 0.6,
+		roughness: 0.2,
+		metalness: 0.1,
+		transparent: true,
+		opacity: 0.9
+	});
+	const matBase = new THREE.MeshStandardMaterial({ color: 0x636e72, metalness: 0.7, roughness: 0.3 });
+	const matFilament = new THREE.MeshStandardMaterial({ color: 0xf9ca24, emissive: 0xf9ca24, emissiveIntensity: 0.8 });
 
-	const questionAnchor = new THREE.Group();
-	questionAnchor.position.set(2, 6, 0);
-	scene.add(questionAnchor);
+	const bulbAnchor = new THREE.Group();
+	bulbAnchor.position.set(2, 6, 1.2);
+	bulbAnchor.rotation.set(0, Math.PI, 0);
+	bodyPivot.add(bulbAnchor);
 
-	const qGroup = new THREE.Group();
-	const qShape = new THREE.Shape();
-	qShape.moveTo(0, 0);
-	qShape.absarc(0, 0.5, 0.5, 0, Math.PI, true);
-	qShape.lineTo(0, -0.5);
-	const qMesh = new THREE.Mesh(new THREE.ExtrudeGeometry(qShape, { depth: 0.2, bevelEnabled: false }), matPropGold);
-	qMesh.scale.set(1.5, 1.5, 1.5);
-	qMesh.rotation.y = Math.PI;
-	qGroup.add(qMesh);
-	const qDot = new THREE.Mesh(new THREE.SphereGeometry(0.25), matPropGold);
-	qDot.position.y = -1.2;
-	qGroup.add(qDot);
-	scene.add(qGroup);
+	const bulb = new THREE.Group();
+	const glass = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 24), matGlass);
+	glass.scale.y = 1.1;
+	glass.castShadow = true;
+	bulb.add(glass);
 
-	return { mesh: qGroup, anchor: questionAnchor, state: 'hidden', vel: new THREE.Vector3() };
+	const base = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.6, 16), matBase);
+	base.position.y = -1.0;
+	base.castShadow = true;
+	bulb.add(base);
+
+	const filament = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.05, 8, 16), matFilament);
+	filament.position.y = -0.2;
+	filament.rotation.x = Math.PI / 2;
+	bulb.add(filament);
+
+	scene.add(bulb);
+
+	return { mesh: bulb, anchor: bulbAnchor, state: 'hidden', vel: new THREE.Vector3() };
 }

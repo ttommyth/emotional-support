@@ -11,6 +11,7 @@
   ],
   "activationEvents": [
     "onView:emotional-support.petView",
+    "onView:emotional-support.controlView",
     "onCommand:emotional-support.setPetMood"
   ],
   "main": "./dist/extension.js",
@@ -30,6 +31,12 @@
           "id": "emotional-support.petView",
           "name": "Emotional Support",
           "type": "webview"
+        },
+        {
+          "id": "emotional-support.controlView",
+          "name": "Control Panel",
+          "type": "webview",
+          "when": "emotional-support.isDev"
         }
       ]
     },

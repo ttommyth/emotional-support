@@ -18,26 +18,30 @@ export const coding: RobotActionDefinition = {
 };
 
 export function createCodingProp(scene: THREE.Scene, bodyPivot: THREE.Object3D): PropState {
-	const matPropBody = new THREE.MeshLambertMaterial({ color: 0x2d3436 });
-	const matPropScreen = new THREE.MeshBasicMaterial({ color: 0x0984e3 });
+	const matBody = new THREE.MeshLambertMaterial({ color: 0x636e72 });
+	const matScreen = new THREE.MeshBasicMaterial({ color: 0x74b9ff });
 
 	const laptopAnchor = new THREE.Group();
-	laptopAnchor.position.set(0, 0, 3.8);
-	laptopAnchor.rotation.set(-0.2, Math.PI, 0);
+	laptopAnchor.position.set(0, 0.5, 3.2);
+	laptopAnchor.rotation.set(-0.3, Math.PI, 0);
 	bodyPivot.add(laptopAnchor);
 
 	const laptop = new THREE.Group();
-	laptop.add(new THREE.Mesh(new RoundedBoxGeometry(3, 0.2, 2.2, 2, 0.05), matPropBody));
+	const base = new THREE.Mesh(new RoundedBoxGeometry(3, 0.2, 2.2, 2, 0.05), matBody);
+	base.castShadow = true;
+	laptop.add(base);
 	const screenPivot = new THREE.Group();
-	screenPivot.position.set(0, 0.1, -1.0);
+	screenPivot.position.set(0, 0.12, -1.0);
 	laptop.add(screenPivot);
-	const lapScreen = new THREE.Mesh(new RoundedBoxGeometry(3, 2, 0.2, 2, 0.05), matPropBody);
-	lapScreen.position.set(0, 1, 0);
-	screenPivot.add(lapScreen);
-	const lapDisplay = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6), matPropScreen);
-	lapDisplay.position.set(0, 1, 0.11);
-	screenPivot.add(lapDisplay);
-	screenPivot.rotation.x = 0.4;
+	const screen = new THREE.Mesh(new RoundedBoxGeometry(3, 2, 0.2, 2, 0.05), matBody);
+	screen.position.set(0, 1, 0);
+	screen.castShadow = true;
+	screenPivot.add(screen);
+	const display = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6), matScreen);
+	display.position.set(0, 1, 0.11);
+	screenPivot.add(display);
+	screenPivot.rotation.x = -0.75;
+
 	scene.add(laptop);
 
 	return { mesh: laptop, anchor: laptopAnchor, state: 'hidden', vel: new THREE.Vector3() };

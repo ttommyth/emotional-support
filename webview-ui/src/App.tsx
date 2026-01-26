@@ -335,6 +335,14 @@ export default function App() {
 			const message = event.data;
 			if (message?.command === 'SET_MOOD' && typeof message?.mood === 'string' && isRobotAction(message.mood)) {
 				setRobotAction(message.mood);
+				return;
+			}
+			if (message?.command === 'SET_AUTOPILOT' && typeof message?.enabled === 'boolean') {
+				isAutoMode = message.enabled;
+				if (isAutoMode) {
+					aiState = 'IDLE';
+					aiTimer = 0;
+				}
 			}
 		};
 		window.addEventListener('message', onMessage);

@@ -18,20 +18,33 @@ export const reading: RobotActionDefinition = {
 };
 
 export function createReadingProp(scene: THREE.Scene, bodyPivot: THREE.Object3D): PropState {
-	const matBookCover = new THREE.MeshLambertMaterial({ color: 0xe17055 });
-	const matWhite = new THREE.MeshLambertMaterial({ color: 0xffffff });
+	const matPaper = new THREE.MeshLambertMaterial({ color: 0xfdfdfd });
+	const matInk = new THREE.MeshBasicMaterial({ color: 0x74b9ff });
+	const matClip = new THREE.MeshLambertMaterial({ color: 0x636e72 });
 
-	const bookAnchor = new THREE.Group();
-	bookAnchor.position.set(0, 0.5, 3.2);
-	bookAnchor.rotation.set(-0.8, Math.PI, 0);
-	bodyPivot.add(bookAnchor);
+	const paperAnchor = new THREE.Group();
+	paperAnchor.position.set(0, 0.6, 3.4);
+	paperAnchor.rotation.set(0.3, Math.PI, 0);
+	bodyPivot.add(paperAnchor);
 
-	const book = new THREE.Group();
-	book.add(new THREE.Mesh(new RoundedBoxGeometry(2.8, 3.8, 0.3, 2, 0.05), matBookCover));
-	const pages = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3.6, 0.2), matWhite);
-	pages.position.z = 0.15;
-	book.add(pages);
-	scene.add(book);
+	const paper = new THREE.Group();
+	const sheet = new THREE.Mesh(new RoundedBoxGeometry(2.6, 3.2, 0.05, 2, 0.03), matPaper);
+	sheet.castShadow = true;
+	paper.add(sheet);
 
-	return { mesh: book, anchor: bookAnchor, state: 'hidden', vel: new THREE.Vector3() };
+	const lines = new THREE.Group();
+	for (let i = 0; i < 5; i++) {
+		const line = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.08), matInk);
+		line.position.set(0, 0.9 - i * 0.5, 0.03);
+		lines.add(line);
+	}
+	paper.add(lines);
+
+	const clip = new THREE.Mesh(new RoundedBoxGeometry(0.8, 0.2, 0.2, 2, 0.05), matClip);
+	clip.position.set(0, 1.7, 0.05);
+	paper.add(clip);
+
+	scene.add(paper);
+
+	return { mesh: paper, anchor: paperAnchor, state: 'hidden', vel: new THREE.Vector3() };
 }

@@ -19,12 +19,13 @@ export const success: RobotActionDefinition = {
 	}
 };
 
-export function createSuccessProp(scene: THREE.Scene): PropState {
+export function createSuccessProp(scene: THREE.Scene, bodyPivot: THREE.Object3D): PropState {
 	const matPropGold = new THREE.MeshPhongMaterial({ color: 0xfdcb6e, shininess: 100 });
 
 	const starAnchor = new THREE.Group();
-	starAnchor.position.set(0, 7, 0);
-	scene.add(starAnchor);
+	starAnchor.position.set(0, 6.8, 1.1);
+	starAnchor.rotation.set(0, Math.PI, 0);
+	bodyPivot.add(starAnchor);
 
 	const sGroup = new THREE.Group();
 	const starShape = new THREE.Shape();
@@ -35,7 +36,9 @@ export function createSuccessProp(scene: THREE.Scene): PropState {
 		starShape.lineTo(Math.sin(thIn) * 0.4, Math.cos(thIn) * 0.4);
 	}
 	starShape.closePath();
-	sGroup.add(new THREE.Mesh(new THREE.ExtrudeGeometry(starShape, { depth: 0.2, bevelEnabled: false }), matPropGold));
+	const starMesh = new THREE.Mesh(new THREE.ExtrudeGeometry(starShape, { depth: 0.2, bevelEnabled: false }), matPropGold);
+	starMesh.rotation.x = Math.PI;
+	sGroup.add(starMesh);
 	scene.add(sGroup);
 
 	return { mesh: sGroup, anchor: starAnchor, state: 'hidden', vel: new THREE.Vector3() };
