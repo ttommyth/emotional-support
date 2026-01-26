@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { McpBridge, RobotControlState } from './mcp-bridge';
+import { CursorHookBridge } from './cursor-hook-bridge';
 import { PetAction, PetMoodService } from './pet-mood-service';
 
 let outputChannel: vscode.OutputChannel | undefined;
@@ -62,6 +63,23 @@ export function activate(context: vscode.ExtensionContext) {
 
 	moodService.start();
 
+	const isCursor = vscode.env.appName.toLowerCase().includes('cursor');
+	if (isCursor) {
+		// Use a global storage directory for events so we don't need to write project-level hook files.
+		const globalEventDir = path.join(context.globalStorageUri.fsPath, 'cursor-events');
+		const cursorHookBridge = new CursorHookBridge(
+			vscode.workspace.workspaceFolders?.map((folder) => folder.uri) ?? [],
+			(payload) => moodService.setPetMood(payload),
+			[globalEventDir],
+			getOutputChannel()
+		);
+		context.subscriptions.push(cursorHookBridge);
+		getOutputChannel().appendLine('[CursorHookBridge] Enabled Cursor hook listener (watching global storage).');
+		getOutputChannel().appendLine(
+			`To avoid committing hook files to the project, place your Cursor hook script in your home hooks and have it write events to: ${globalEventDir}`
+		);
+	}
+
 	// Initialize extension OutputChannel and register show/clear commands
 	getOutputChannel().appendLine(`Activated Emotional Support v${String(context.extension.packageJSON?.version ?? '0.0.0')}`);
 	context.subscriptions.push(getOutputChannel());
@@ -84,6 +102,77 @@ export function activate(context: vscode.ExtensionContext) {
 			const nextIndex = (PET_ACTIONS.indexOf(currentMood) + 1) % PET_ACTIONS.length;
 			const nextMood = PET_ACTIONS[nextIndex];
 			petViewProvider.setMood({ mood: nextMood, message: 'Demo mood update.' });
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('emotional-support.installUserHook', async () => {
+			const ideName = (vscode.env.appName || '').toLowerCase();
+			const isCursor = ideName.includes('cursor');
+			if (!isCursor) {
+				const pick = await vscode.window.showQuickPick(
+					['Install for Cursor', 'Show instructions', 'Cancel'],
+					{ placeHolder: 'This installer is specific to Cursor. Choose an action.' }
+				);
+				if (!pick || pick === 'Cancel') {
+					return;
+				}
+				if (pick === 'Show instructions') {
+					try {
+						const readmePath = context.asAbsolutePath(path.join('hooks-samples', 'README.md'));
+						const doc = await vscode.workspace.openTextDocument(readmePath);
+						await vscode.window.showTextDocument(doc, { preview: true });
+					} catch {
+						vscode.window.showInformationMessage('See hooks-samples/README.md for setup instructions.');
+					}
+					return;
+				}
+				// fall through to install if user chose Install for Cursor
+			}
+			// Proceed with installing user-level Cursor hook
+			try {
+				const samplePath = context.asAbsolutePath(path.join('hooks-samples', 'user-emotional-support-hook.js'));
+				const homeDir = process.env.HOME || process.env.USERPROFILE;
+				if (!homeDir) {
+					vscode.window.showErrorMessage('Cannot determine user home directory.');
+					return;
+				}
+				const destDir = path.join(homeDir, '.cursor', 'hooks');
+				await fs.promises.mkdir(destDir, { recursive: true });
+				const destPath = path.join(destDir, 'emotional-support-hook.js');
+				await fs.promises.copyFile(samplePath, destPath);
+				// Try to set executable bit on POSIX systems
+				try {
+					if (process.platform !== 'win32') {
+						await fs.promises.chmod(destPath, 0o755);
+					}
+				} catch {}
+				// Ensure user hooks config exists
+				const hooksJsonPath = path.join(homeDir, '.cursor', 'hooks.json');
+				let hooksConfig: any = { version: 1, hooks: {} };
+				try {
+					const existing = await fs.promises.readFile(hooksJsonPath, 'utf8');
+					hooksConfig = JSON.parse(existing);
+				} catch {
+					hooksConfig = { version: 1, hooks: {} };
+				}
+				// Add entries for events if not present
+				const events = ['beforeReadFile', 'afterFileEdit', 'afterAgentThought', 'postToolUseFailure', 'afterAgentResponse'];
+				hooksConfig.hooks = hooksConfig.hooks || {};
+				events.forEach((e) => {
+					if (!Array.isArray(hooksConfig.hooks[e])) {
+						hooksConfig.hooks[e] = [];
+					}
+					const rel = `./hooks/emotional-support-hook.js`;
+					if (!hooksConfig.hooks[e].some((h: any) => h && h.command === rel)) {
+						hooksConfig.hooks[e].push({ command: rel });
+					}
+				});
+				await fs.promises.writeFile(hooksJsonPath, JSON.stringify(hooksConfig, null, 2), 'utf8');
+				vscode.window.showInformationMessage('Installed user-level Emotional Support hook to your home Cursor hooks. Restart Cursor to activate.');
+			} catch (err) {
+				vscode.window.showErrorMessage(`Failed to install hook: ${String(err)}`);
+			}
 		})
 	);
 
