@@ -46,6 +46,15 @@
         "command": "emotional-support.setPetMood",
         "title": "Cycle Emotional Support Mood (Demo)"
       }
+      ,
+      {
+        "command": "emotional-support.showOutput",
+        "title": "Emotional Support: Show Output"
+      },
+      {
+        "command": "emotional-support.clearOutput",
+        "title": "Emotional Support: Clear Output"
+      }
     ],
     "mcpServerDefinitionProviders": [
       {

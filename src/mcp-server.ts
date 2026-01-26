@@ -11,6 +11,14 @@ const EMOTIONS = PET_ACTIONS.join(', ');
 
 const BRIDGE_DIR = process.env.EMOTIONAL_SUPPORT_BRIDGE_DIR;
 
+const log = {
+	info: (msg: string) => process.stdout.write(`[mcp] ${msg}\n`),
+	error: (msg: string, err?: unknown) => {
+		const errText = err ? ' ' + String(err) : '';
+		process.stderr.write(`[mcp][ERROR] ${msg}${errText}\n`);
+	}
+};
+
 const ensureBridgeDir = async () => {
 	if (!BRIDGE_DIR) {
 		throw new Error('Missing EMOTIONAL_SUPPORT_BRIDGE_DIR environment variable.');
@@ -90,15 +98,15 @@ server.registerTool(
 
 async function main() {
 	if (!BRIDGE_DIR) {
-		console.error('Missing EMOTIONAL_SUPPORT_BRIDGE_DIR. MCP server cannot start.');
+		log.error('Missing EMOTIONAL_SUPPORT_BRIDGE_DIR. MCP server cannot start.');
 		process.exit(1);
 	}
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
-	console.error('Emotional Support MCP server running on stdio.');
+	log.info('Emotional Support MCP server running on stdio.');
 }
 
 main().catch((error) => {
-	console.error('Failed to start Emotional Support MCP server:', error);
+	log.error('Failed to start Emotional Support MCP server:', error);
 	process.exit(1);
 });

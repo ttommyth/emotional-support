@@ -6,6 +6,15 @@ import * as path from 'path';
 import { McpBridge, RobotControlState } from './mcp-bridge';
 import { PetAction, PetMoodService } from './pet-mood-service';
 
+let outputChannel: vscode.OutputChannel | undefined;
+
+export function getOutputChannel(): vscode.OutputChannel {
+	if (!outputChannel) {
+		outputChannel = vscode.window.createOutputChannel('Emotional Support');
+	}
+	return outputChannel;
+}
+
 const IDLE_ACTIONS: PetAction[] = ['idle', 'stretch', 'dance', 'lookaround', 'shrug', 'wave', 'sleep', 'walk'];
 const CODING_ACTIONS: PetAction[] = [
 	'thinking',
@@ -52,6 +61,18 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	moodService.start();
+
+	// Initialize extension OutputChannel and register show/clear commands
+	getOutputChannel().appendLine(`Activated Emotional Support v${String(context.extension.packageJSON?.version ?? '0.0.0')}`);
+	context.subscriptions.push(getOutputChannel());
+	context.subscriptions.push(
+		vscode.commands.registerCommand('emotional-support.showOutput', () => {
+			getOutputChannel().show(true);
+		}),
+		vscode.commands.registerCommand('emotional-support.clearOutput', () => {
+			getOutputChannel().clear();
+		})
+	);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('emotional-support.setPetMood', async () => {
