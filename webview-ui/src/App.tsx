@@ -25,11 +25,10 @@ export default function App() {
 		scene.background = backgroundColor;
 		scene.fog = new THREE.Fog(backgroundColor, 14, 55);
 
-		const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+		const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
 		camera.position.set(0, 3.6, 18);
 
 		const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-		renderer.setSize(containerEl.clientWidth, containerEl.clientHeight);
 		renderer.setPixelRatio(window.devicePixelRatio);
 		renderer.shadowMap.enabled = true;
 		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -398,39 +397,44 @@ export default function App() {
 			renderer.render(scene, camera);
 		}
 
-		function handleResize() {
-			const rect = containerEl.getBoundingClientRect();
-			const width = rect.width || window.innerWidth;
-			const height = rect.height || window.innerHeight;
-			camera.aspect = width / height;
-			camera.updateProjectionMatrix();
-			renderer.setPixelRatio(window.devicePixelRatio);
-			renderer.setSize(width, height, false);
+		let resizeRaf = 0;
+		const scheduleResize = () => {
+			if (resizeRaf) return;
+			resizeRaf = requestAnimationFrame(() => {
+				resizeRaf = 0;
+				const width = containerEl.clientWidth;
+				const height = containerEl.clientHeight;
+				if (width === 0 || height === 0) return;
+				camera.aspect = width / height;
+				camera.updateProjectionMatrix();
+				renderer.setSize(width, height);
 
-			const minDimension = Math.min(width, height);
-			const scaleFactor = Math.max(0.85, Math.min(1.25, minDimension / 720));
-			moveBounds.x = 10 * scaleFactor;
-			moveBounds.zRange = 6 * scaleFactor;
-			moveBounds.zNear = 2 + (scaleFactor - 1) * 0.6;
+				const minDimension = Math.min(width, height);
+				const scaleFactor = Math.max(0.85, Math.min(1.25, minDimension / 720));
+				moveBounds.x = 10 * scaleFactor;
+				moveBounds.zRange = 6 * scaleFactor;
+				moveBounds.zNear = 2 + (scaleFactor - 1) * 0.6;
 
-			peekTargets[0].set(-0.52 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
-			peekTargets[1].set(0.52 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
-			peekTargets[2].set(0, -1.2, 9.2 + moveBounds.zNear * 0.6);
-		}
+				peekTargets[0].set(-0.52 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
+				peekTargets[1].set(0.52 * moveBounds.x, -0.4, 8.5 + moveBounds.zNear * 0.5);
+				peekTargets[2].set(0, -1.2, 9.2 + moveBounds.zNear * 0.6);
+			});
+		};
 
-		const resizeObserver = new ResizeObserver(() => handleResize());
+		const resizeObserver = new ResizeObserver(scheduleResize);
 		resizeObserver.observe(containerEl);
-		window.addEventListener('resize', handleResize);
-		handleResize();
+		window.addEventListener('resize', scheduleResize);
+		scheduleResize();
 		animate();
 		vscode.postMessage({ command: 'READY' });
 
 		return () => {
 			window.removeEventListener('click', onWindowClick);
-			window.removeEventListener('resize', handleResize);
+			window.removeEventListener('resize', scheduleResize);
 			resizeObserver.disconnect();
 			window.removeEventListener('message', onMessage);
 			cancelAnimationFrame(animationId);
+			if (resizeRaf) cancelAnimationFrame(resizeRaf);
 			renderer.dispose();
 			container.removeChild(renderer.domElement);
 		};
