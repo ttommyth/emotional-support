@@ -189,6 +189,10 @@ export default function App() {
 		let isAutoMode = true;
 		let aiState = 'IDLE';
 		let aiTimer = 0;
+		let mcpOverrideActive = false;
+		let mcpRequestedAction: RobotActionName | undefined;
+		let mcpDurationTimer = 0;
+		let mcpTimeoutId = 0;
 		const moveTarget = new THREE.Vector3();
 		const forwardDir = new THREE.Vector3(0, 0, 1);
 		const toCameraDir = new THREE.Vector3();
@@ -239,6 +243,19 @@ export default function App() {
 				while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
 				while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
 				robot.rotation.y += rotDiff * 0.1;
+				return;
+			}
+
+
+			if (mcpOverrideActive) {
+				if (mcpDurationTimer > 0) {
+					mcpDurationTimer = Math.max(0, mcpDurationTimer - delta);
+					if (mcpDurationTimer <= 0 && mcpRequestedAction && mcpRequestedAction !== 'idle') {
+						mcpOverrideActive = false;
+						mcpRequestedAction = 'idle';
+						setRobotAction('idle');
+					}
+				}
 				return;
 			}
 
@@ -338,6 +355,9 @@ export default function App() {
 		let animationId = 0;
 
 		const onWindowClick = (event: MouseEvent) => {
+			if (mcpOverrideActive) {
+				return;
+			}
 			createRipple(event.clientX, event.clientY);
 
 			currentAction = 'knocked';
@@ -361,6 +381,24 @@ export default function App() {
 			const message = event.data;
 			if (message?.command === 'SET_MOOD' && typeof message?.mood === 'string' && isRobotAction(message.mood)) {
 				setRobotAction(message.mood);
+				mcpRequestedAction = message.mood;
+				mcpOverrideActive = message.mood !== 'idle';
+				mcpDurationTimer = typeof message?.durationSeconds === 'number' && message.durationSeconds > 0
+					? message.durationSeconds
+					: 0;
+				if (mcpTimeoutId) {
+					window.clearTimeout(mcpTimeoutId);
+					mcpTimeoutId = 0;
+				}
+				if (mcpDurationTimer > 0 && mcpRequestedAction !== 'idle') {
+					mcpTimeoutId = window.setTimeout(() => {
+						mcpDurationTimer = 0;
+					}, mcpDurationTimer * 1000);
+				}
+				if (!mcpOverrideActive) {
+					aiState = 'IDLE';
+					aiTimer = 0;
+				}
 				return;
 			}
 			if (message?.command === 'SET_AUTOPILOT' && typeof message?.enabled === 'boolean') {
@@ -377,6 +415,8 @@ export default function App() {
 				if (!target) {
 					return;
 				}
+				mcpOverrideActive = true;
+				mcpRequestedAction = 'walk';
 				isAutoMode = true;
 				aiState = 'MOVING';
 				aiTimer = 4;

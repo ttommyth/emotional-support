@@ -10,6 +10,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onView:emotional-support.petView",
     "onView:emotional-support.controlView",
     "onCommand:emotional-support.setPetMood"
@@ -45,6 +46,12 @@
         "command": "emotional-support.setPetMood",
         "title": "Cycle Emotional Support Mood (Demo)"
       }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "emotional-support.mcp",
+        "label": "Emotional Support MCP Server"
+      }
     ]
   },
   "scripts": {
@@ -74,5 +81,9 @@
     "typescript": "^5.9.3",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.5.0",
+    "zod": "^4.0.0"
   }
 }

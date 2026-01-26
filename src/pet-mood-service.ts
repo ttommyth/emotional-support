@@ -1,26 +1,31 @@
-export type PetAction =
-	| 'idle'
-	| 'thinking'
-	| 'coding'
-	| 'debugging'
-	| 'reviewing'
-	| 'refactoring'
-	| 'testing'
-	| 'reading'
-	| 'success'
-	| 'error'
-	| 'sleep'
-	| 'walk'
-	| 'wave'
-	| 'stretch'
-	| 'dance'
-	| 'lookaround'
-	| 'shrug'
-	| 'knocked';
+export const PET_ACTIONS = [
+	'idle',
+	'thinking',
+	'coding',
+	'debugging',
+	'reviewing',
+	'refactoring',
+	'testing',
+	'reading',
+	'success',
+	'error',
+	'sleep',
+	'walk',
+	'wave',
+	'stretch',
+	'dance',
+	'lookaround',
+	'shrug',
+	'peek',
+	'knocked'
+] as const;
+
+export type PetAction = (typeof PET_ACTIONS)[number];
 
 export type PetMoodPayload = {
 	mood: PetAction;
 	message?: string;
+	durationSeconds?: number;
 };
 
 export class PetMoodService {

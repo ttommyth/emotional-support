@@ -2,6 +2,8 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import * as path from 'path';
+import { McpBridge, RobotControlState } from './mcp-bridge';
 import { PetAction, PetMoodService } from './pet-mood-service';
 
 const IDLE_ACTIONS: PetAction[] = ['idle', 'stretch', 'dance', 'lookaround', 'shrug', 'wave', 'sleep', 'walk'];
@@ -16,13 +18,17 @@ const CODING_ACTIONS: PetAction[] = [
 	'success',
 	'error'
 ];
-const SPECIAL_ACTIONS: PetAction[] = ['knocked'];
+const SPECIAL_ACTIONS: PetAction[] = ['peek', 'knocked'];
 const PET_ACTIONS: PetAction[] = [...IDLE_ACTIONS, ...CODING_ACTIONS, ...SPECIAL_ACTIONS];
 
 const isPetAction = (value: string): value is PetAction => PET_ACTIONS.includes(value as PetAction);
 
 export function activate(context: vscode.ExtensionContext) {
 	const petViewProvider = new PetViewProvider(context.extensionUri);
+	const mcpBridge = new McpBridge(context.globalStorageUri.fsPath, petViewProvider);
+	context.subscriptions.push(mcpBridge);
+	petViewProvider.setStateChangeHandler((state) => mcpBridge.publishState(state));
+	mcpBridge.publishState(petViewProvider.getState());
 	const isDevMode = context.extensionMode === vscode.ExtensionMode.Development;
 	vscode.commands.executeCommand('setContext', 'emotional-support.isDev', isDevMode);
 
@@ -59,6 +65,27 @@ export function activate(context: vscode.ExtensionContext) {
 			petViewProvider.setMood({ mood: nextMood, message: 'Demo mood update.' });
 		})
 	);
+
+	const providerId = 'emotional-support.mcp';
+	context.subscriptions.push(
+		vscode.lm.registerMcpServerDefinitionProvider(providerId, {
+			provideMcpServerDefinitions: () => {
+				const serverModule = context.asAbsolutePath(path.join('dist', 'mcp-server.js'));
+				const env = {
+					EMOTIONAL_SUPPORT_BRIDGE_DIR: context.globalStorageUri.fsPath
+				};
+				return [
+					new vscode.McpStdioServerDefinition(
+						'Emotional Support Robot',
+						process.execPath,
+						[serverModule],
+						env,
+						String(context.extension.packageJSON?.version ?? '0.0.0')
+					)
+				];
+			}
+		})
+	);
 }
 
 export function deactivate() {}
@@ -68,10 +95,15 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 
 	private view: vscode.WebviewView | undefined;
 	private readonly extensionUri: vscode.Uri;
-	private readonly state: { currentMood?: PetAction } = {};
+	private readonly state: { currentMood?: PetAction; autopilotEnabled: boolean } = { autopilotEnabled: true };
+	private onStateChange?: (state: RobotControlState) => void;
 
 	constructor(extensionUri: vscode.Uri) {
 		this.extensionUri = extensionUri;
+	}
+
+	public setStateChangeHandler(handler: (state: RobotControlState) => void) {
+		this.onStateChange = handler;
 	}
 
 	public resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -86,6 +118,7 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 			switch (message?.command) {
 				case 'READY': {
 					this.setMood({ mood: 'idle', message: 'Ready to swim.' });
+					this.setAutopilot(this.state.autopilotEnabled);
 					break;
 				}
 				case 'SET_MOOD': {
@@ -108,13 +141,24 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		return this.state.currentMood;
 	}
 
-	public setMood(payload: { mood: PetAction; message?: string }) {
+	public getState(): RobotControlState {
+		return {
+			mood: this.state.currentMood,
+			autopilotEnabled: this.state.autopilotEnabled,
+			updatedAt: new Date().toISOString()
+		};
+	}
+
+	public setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number }) {
 		this.state.currentMood = payload.mood;
 		this.view?.webview.postMessage({ command: 'SET_MOOD', ...payload });
+		this.onStateChange?.(this.getState());
 	}
 
 	public setAutopilot(enabled: boolean) {
+		this.state.autopilotEnabled = enabled;
 		this.view?.webview.postMessage({ command: 'SET_AUTOPILOT', enabled });
+		this.onStateChange?.(this.getState());
 	}
 
 	public forceMove(target: 'front' | 'left' | 'right') {
