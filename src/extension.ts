@@ -157,7 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
 					hooksConfig = { version: 1, hooks: {} };
 				}
 				// Add entries for events if not present
-				const events = ['beforeReadFile', 'afterFileEdit', 'afterAgentThought', 'postToolUseFailure', 'afterAgentResponse'];
+				const events = ['beforeReadFile', 'afterFileEdit', 'afterAgentThought', 'beforeSubmitPrompt', 'postToolUseFailure', 'afterAgentResponse'];
 				hooksConfig.hooks = hooksConfig.hooks || {};
 				events.forEach((e) => {
 					if (!Array.isArray(hooksConfig.hooks[e])) {

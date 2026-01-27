@@ -2,19 +2,22 @@
   "version": 1,
   "hooks": {
     "beforeReadFile": [
-      { "command": "node .cursor/hooks/emotional-support-hook.js" }
+      { "command": "node ./hooks/emotional-support-hook.js" }
     ],
     "afterFileEdit": [
-      { "command": "node .cursor/hooks/emotional-support-hook.js" }
+      { "command": "node ./hooks/emotional-support-hook.js" }
     ],
     "afterAgentThought": [
-      { "command": "node .cursor/hooks/emotional-support-hook.js" }
+      { "command": "node ./hooks/emotional-support-hook.js" }
+    ],
+    "beforeSubmitPrompt": [
+      { "command": "node ./hooks/emotional-support-hook.js" }
     ],
     "postToolUseFailure": [
-      { "command": "node .cursor/hooks/emotional-support-hook.js" }
+      { "command": "node ./hooks/emotional-support-hook.js" }
     ],
     "afterAgentResponse": [
-      { "command": "node .cursor/hooks/emotional-support-hook.js" }
+      { "command": "node ./hooks/emotional-support-hook.js" }
     ]
   }
 }

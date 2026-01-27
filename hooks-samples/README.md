@@ -32,6 +32,7 @@ How to install the sample (recommended):
        "beforeReadFile": [{ "command": "./hooks/emotional-support-hook.js" }],
        "afterFileEdit": [{ "command": "./hooks/emotional-support-hook.js" }],
        "afterAgentThought": [{ "command": "./hooks/emotional-support-hook.js" }],
+       "beforeSubmitPrompt": [{ "command": "./hooks/emotional-support-hook.js" }],
        "postToolUseFailure": [{ "command": "./hooks/emotional-support-hook.js" }],
        "afterAgentResponse": [{ "command": "./hooks/emotional-support-hook.js" }]
      }
@@ -56,5 +57,6 @@ How to install the sample (recommended):
 
 Notes:
 - If `EMOTIONAL_SUPPORT_EVENT_DIR` is not set, the sample writes to `~/.cursor/emotional-support-events` as a fallback (keeps everything out of project folders).
-- The hook returns `permission: "allow"` for `beforeReadFile` events to avoid blocking reads; modify if you need stricter control.
+- The hook always returns `permission: "allow"` for `beforeReadFile` events and non-blocking responses for all other events, acting as a pure listener that never blocks cursor operations.
 - You can customize `HOOK_TO_MOOD` inside the sample to change which mood maps to which hook event.
+- The hook now listens to `beforeSubmitPrompt` event to track thinking/planning behavior when the agent is about to submit a prompt.

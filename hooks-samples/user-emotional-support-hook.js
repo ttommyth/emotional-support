@@ -13,6 +13,7 @@ const HOOK_TO_MOOD = {
   beforeReadFile: 'reading',
   afterFileEdit: 'coding',
   afterAgentThought: 'thinking',
+  beforeSubmitPrompt: 'thinking',  // Planning/thinking before submitting prompt
   postToolUseFailure: 'error',
   afterAgentResponse: 'success'
 };
@@ -57,6 +58,8 @@ function makeMessage(eventName, input) {
     }
     case 'afterAgentThought':
       return 'Thinking through the task.';
+    case 'beforeSubmitPrompt':
+      return 'Planning next steps.';
     case 'postToolUseFailure':
       return 'Ran into an error.';
     case 'afterAgentResponse':
@@ -93,13 +96,14 @@ async function main() {
   }
 
   // Hook contract: for `beforeReadFile` we must return permission decision
+  // Always return 'allow' to act as a pure listener and not block reads
   if (eventName === 'beforeReadFile') {
     const output = { permission: 'allow' };
     process.stdout.write(JSON.stringify(output));
     return;
   }
 
-  // Default: return empty JSON
+  // For all other events, return empty JSON (non-blocking)
   process.stdout.write(JSON.stringify({}));
 }
 
@@ -107,5 +111,7 @@ main().catch((err) => {
   try {
     console.error(`[emotional-support-hook] runtime error: ${String(err)}`);
   } catch {}
+  // On any error, always return non-blocking response to ensure
+  // the hook never blocks cursor operations
   process.stdout.write(JSON.stringify({ permission: 'allow' }));
 });
