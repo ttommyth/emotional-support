@@ -10,6 +10,9 @@
     "afterAgentThought": [
       { "command": "node .cursor/hooks/emotional-support-hook.js" }
     ],
+    "beforeSubmitPrompt": [
+      { "command": "node .cursor/hooks/emotional-support-hook.js" }
+    ],
     "postToolUseFailure": [
       { "command": "node .cursor/hooks/emotional-support-hook.js" }
     ],

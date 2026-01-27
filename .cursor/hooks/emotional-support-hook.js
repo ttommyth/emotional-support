@@ -8,6 +8,7 @@ const HOOK_TO_MOOD = {
 	beforeReadFile: 'reading',
 	afterFileEdit: 'coding',
 	afterAgentThought: 'thinking',
+	beforeSubmitPrompt: 'thinking',  // Planning/thinking before submitting prompt
 	postToolUseFailure: 'error',
 	afterAgentResponse: 'success'
 };
@@ -36,6 +37,8 @@ const getMessage = (eventName, payload) => {
 		}
 		case 'afterAgentThought':
 			return 'Thinking through the task.';
+		case 'beforeSubmitPrompt':
+			return 'Planning next steps.';
 		case 'postToolUseFailure':
 			return 'Ran into an error.';
 		case 'afterAgentResponse':
@@ -64,10 +67,14 @@ const writeEvent = (eventName, input) => {
 };
 
 const writeOutput = (eventName) => {
+	// Always return non-blocking responses for all hooks
+	// For beforeReadFile, we must return permission: 'allow'
+	// For all other events, return empty object (non-blocking)
 	if (eventName === 'beforeReadFile') {
 		process.stdout.write(JSON.stringify({ permission: 'allow' }));
 		return;
 	}
+	// Return empty object for all other events to avoid blocking
 	process.stdout.write(JSON.stringify({}));
 };
 
@@ -80,5 +87,7 @@ const main = async () => {
 };
 
 main().catch(() => {
+	// On any error, always return non-blocking response
+	// This ensures the hook never blocks cursor operations
 	process.stdout.write(JSON.stringify({ permission: 'allow' }));
 });
