@@ -3,9 +3,6 @@ name: Publish VS Code Extension
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to publish (e.g. 1.2.3 or 1.2.3-rc.1)"
-        required: true
       channel:
         description: "Release channel"
         required: true
@@ -40,8 +37,24 @@ jobs:
       - name: Install webview dependencies
         run: npm ci --prefix webview-ui
 
+      - name: Determine version bump from commits
+        id: bump
+        run: |
+          npm_config_yes=true npx conventional-recommended-bump -p angular > .bump_type
+          BUMP_TYPE=$(cat .bump_type)
+          if [ -z "$BUMP_TYPE" ]; then
+            echo "Unable to determine bump type."
+            exit 1
+          fi
+          echo "type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+
       - name: Set extension version
-        run: npm version ${{ inputs.version }} --no-git-tag-version
+        run: |
+          if [ "${{ inputs.channel }}" = "rc" ]; then
+            npm version pre${{ steps.bump.outputs.type }} --preid=rc --no-git-tag-version
+          else
+            npm version ${{ steps.bump.outputs.type }} --no-git-tag-version
+          fi
 
       - name: Commit version bump
         run: |
@@ -51,7 +64,8 @@ jobs:
           if git diff --cached --quiet; then
             echo "No version changes to commit."
           else
-            git commit -m "chore(release): v${{ inputs.version }}"
+            VERSION=$(node -p "require('./package.json').version")
+            git commit -m "chore(release): v${VERSION}"
             git push
           fi
 
