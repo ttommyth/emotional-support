@@ -254,15 +254,6 @@ export default function App() {
 		}
 
 		function updateAI(delta: number) {
-			if (currentAction === 'knocked') {
-				let rotDiff = 0 - robot.rotation.y;
-				while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-				while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-				robot.rotation.y += rotDiff * 0.1;
-				return;
-			}
-
-
 			if (mcpOverrideActive) {
 				if (mcpDurationTimer > 0) {
 					mcpDurationTimer = Math.max(0, mcpDurationTimer - delta);
@@ -371,24 +362,71 @@ export default function App() {
 		let animationId = 0;
 
 		const onWindowClick = (event: MouseEvent) => {
+			// Don't interrupt MCP-controlled behaviors
 			if (mcpOverrideActive) {
 				return;
 			}
 			createRipple(event.clientX, event.clientY);
 
-			currentAction = 'knocked';
-			setEyeColor('knocked');
+			// Attention-getting mechanism: robot responds based on current state
+			const wasIdle = currentAction === 'idle' || currentAction === 'lookaround' || 
+							currentAction === 'stretch' || currentAction === 'shrug';
+			const wasSleeping = currentAction === 'sleep';
+			const wasWorking = ['coding', 'debugging', 'reviewing', 'refactoring', 'testing', 'reading', 'thinking'].includes(currentAction);
 
-			setTimeout(() => {
-				if (currentAction === 'knocked') {
-					currentAction = 'idle';
-					setEyeColor('idle');
-					if (isAutoMode) {
-						aiState = 'IDLE';
-						aiTimer = 0;
+			if (wasSleeping) {
+				// Wake up with a brief knocked reaction then wave
+				currentAction = 'knocked';
+				setEyeColor('knocked');
+				setTimeout(() => {
+					if (currentAction === 'knocked') {
+						currentAction = 'wave';
+						setEyeColor('wave');
+						if (isAutoMode) {
+							aiState = 'IDLE';
+							aiTimer = 2;
+						}
 					}
-				}
-			}, 2000);
+				}, 1500);
+			} else if (wasWorking) {
+				// Brief acknowledgment without fully interrupting - just look at camera
+				// Make robot face the camera briefly
+				const targetRot = 0; // Face forward toward camera
+				let rotDiff = targetRot - robot.rotation.y;
+				while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+				while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+				// Smooth turn toward camera
+				const turnTimer = setInterval(() => {
+					const currentDiff = targetRot - robot.rotation.y;
+					if (Math.abs(currentDiff) < 0.05) {
+						clearInterval(turnTimer);
+					} else {
+						robot.rotation.y += currentDiff * 0.15;
+					}
+				}, 16);
+				setTimeout(() => clearInterval(turnTimer), 500);
+			} else if (wasIdle) {
+				// Friendly wave response
+				currentAction = 'wave';
+				setEyeColor('wave');
+				setTimeout(() => {
+					if (currentAction === 'wave') {
+						currentAction = 'idle';
+						setEyeColor('idle');
+						if (isAutoMode) {
+							aiState = 'IDLE';
+							aiTimer = 0;
+						}
+					}
+				}, 2000);
+			} else {
+				// For any other action, just make sure robot is facing camera
+				const targetRot = 0;
+				let rotDiff = targetRot - robot.rotation.y;
+				while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+				while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+				robot.rotation.y += rotDiff * 0.3; // Quick turn
+			}
 		};
 
 		window.addEventListener('click', onWindowClick);
