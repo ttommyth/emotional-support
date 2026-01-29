@@ -46,6 +46,167 @@ export function activate(context: vscode.ExtensionContext) {
 		petViewProvider.setMood(payload);
 	});
 
+	// Window focus monitoring for behavior adjustments
+	let windowFocusTimer: NodeJS.Timeout | undefined;
+	let followUpTimer: NodeJS.Timeout | undefined; // For multi-step behaviors
+	let lastFocusLostTime: number | undefined;
+	const UNFOCUSED_LOOKAROUND_DELAY_MS = 30000; // 30 seconds - brief check
+	const UNFOCUSED_SLEEP_DELAY_MS = 120000; // 2 minutes
+	const UNFOCUSED_WALK_AWAY_DELAY_MS = 180000; // 3 minutes
+
+	const clearAllTimers = () => {
+		if (windowFocusTimer) {
+			clearTimeout(windowFocusTimer);
+			windowFocusTimer = undefined;
+		}
+		if (followUpTimer) {
+			clearTimeout(followUpTimer);
+			followUpTimer = undefined;
+		}
+	};
+
+	const handleWindowStateChange = (state: vscode.WindowState) => {
+		const isFocused = state.focused;
+		
+		if (!isFocused) {
+			// Window lost focus
+			if (!lastFocusLostTime) {
+				lastFocusLostTime = Date.now();
+			}
+			
+			// Clear any existing timers
+			clearAllTimers();
+			
+			// Schedule behavior changes based on inactive duration
+			const scheduleNextBehavior = (delay: number) => {
+				windowFocusTimer = setTimeout(() => {
+					if (!vscode.window.state.focused && petViewProvider.isReady()) {
+						if (!lastFocusLostTime) {
+							// Safety check - shouldn't happen but handle gracefully
+							return;
+						}
+						
+						const elapsedTime = Date.now() - lastFocusLostTime;
+						
+						if (elapsedTime >= UNFOCUSED_WALK_AWAY_DELAY_MS) {
+							// Walk away behavior - robot moves around and sleeps
+							petViewProvider.setMood({ 
+								mood: 'walk', 
+								message: 'Window inactive - walking away',
+								durationSeconds: 3
+							});
+							
+							// Then sleep (store timer so it can be cleared)
+							followUpTimer = setTimeout(() => {
+								if (!vscode.window.state.focused && petViewProvider.isReady()) {
+									petViewProvider.setMood({ 
+										mood: 'sleep', 
+										message: 'Window inactive - sleeping'
+									});
+								}
+							}, 3000);
+						} else if (elapsedTime >= UNFOCUSED_SLEEP_DELAY_MS) {
+							// Just sleep
+							petViewProvider.setMood({ 
+								mood: 'sleep', 
+								message: 'Window inactive - sleeping'
+							});
+							// Schedule walk away for later
+							scheduleNextBehavior(UNFOCUSED_WALK_AWAY_DELAY_MS - UNFOCUSED_SLEEP_DELAY_MS);
+						} else if (elapsedTime >= UNFOCUSED_LOOKAROUND_DELAY_MS) {
+							// Look around - short break detected
+							petViewProvider.setMood({ 
+								mood: 'lookaround', 
+								message: 'Taking a short break?',
+								durationSeconds: 2
+							});
+							// Schedule sleep for later
+							scheduleNextBehavior(UNFOCUSED_SLEEP_DELAY_MS - UNFOCUSED_LOOKAROUND_DELAY_MS);
+						}
+					}
+				}, delay);
+			};
+			
+			// Start with the first behavior (lookaround after 30 seconds)
+			scheduleNextBehavior(UNFOCUSED_LOOKAROUND_DELAY_MS);
+			
+			getOutputChannel().appendLine(`[WindowMonitor] Window lost focus at ${new Date().toISOString()}`);
+		} else {
+			// Window gained focus
+			if (lastFocusLostTime) {
+				const inactiveTimeMs = Date.now() - lastFocusLostTime;
+				const inactiveTimeMin = Math.floor(inactiveTimeMs / 60000);
+				getOutputChannel().appendLine(`[WindowMonitor] Window regained focus after ${inactiveTimeMin} minutes inactive`);
+				
+				// Different behaviors based on how long they were away
+				if (petViewProvider.isReady()) {
+					const currentMood = petViewProvider.getCurrentMood();
+					
+					if (currentMood === 'sleep') {
+						// Wake up from sleep
+						petViewProvider.setMood({ 
+							mood: 'stretch', 
+							message: 'Waking up!',
+							durationSeconds: 3
+						});
+						
+						// Then wave based on time away (store timer so it can be cleared)
+						followUpTimer = setTimeout(() => {
+							if (petViewProvider.isReady() && vscode.window.state.focused) {
+								const greeting = inactiveTimeMin > 10 
+									? 'Long time no see! 👋' 
+									: inactiveTimeMin > 3 
+									? 'Welcome back! 👋'
+									: 'Hey! 👋';
+								petViewProvider.setMood({ 
+									mood: 'wave', 
+									message: greeting,
+									durationSeconds: 2
+								});
+							}
+						}, 3000);
+					} else if (currentMood === 'lookaround' || currentMood === 'walk') {
+						// Quick acknowledgment if they come back during lookaround or walk
+						petViewProvider.setMood({ 
+							mood: 'wave', 
+							message: 'Back already? 👋',
+							durationSeconds: 2
+						});
+					} else if (inactiveTimeMs < UNFOCUSED_LOOKAROUND_DELAY_MS) {
+						// Brief absence (less than 30 seconds), just a quick peek
+						petViewProvider.setMood({ 
+							mood: 'peek', 
+							message: 'Quick check...',
+							durationSeconds: 1
+						});
+					}
+				}
+				
+				lastFocusLostTime = undefined;
+			}
+			
+			// Clear any pending timers
+			clearAllTimers();
+			
+			getOutputChannel().appendLine(`[WindowMonitor] Window gained focus at ${new Date().toISOString()}`);
+		}
+	};
+
+	// Monitor window state changes
+	context.subscriptions.push(
+		vscode.window.onDidChangeWindowState(handleWindowStateChange)
+	);
+
+	// Check initial state
+	handleWindowStateChange(vscode.window.state);
+
+	// Cleanup timers on deactivation
+	context.subscriptions.push({
+		dispose: () => {
+			clearAllTimers();
+		}
+	});
+
 	context.subscriptions.push(moodService);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(PetViewProvider.viewType, petViewProvider, {

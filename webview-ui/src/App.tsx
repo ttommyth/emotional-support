@@ -254,15 +254,6 @@ export default function App() {
 		}
 
 		function updateAI(delta: number) {
-			if (currentAction === 'knocked') {
-				let rotDiff = 0 - robot.rotation.y;
-				while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-				while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-				robot.rotation.y += rotDiff * 0.1;
-				return;
-			}
-
-
 			if (mcpOverrideActive) {
 				if (mcpDurationTimer > 0) {
 					mcpDurationTimer = Math.max(0, mcpDurationTimer - delta);
@@ -370,25 +361,99 @@ export default function App() {
 		const blinkDuration = 0.15;
 		let animationId = 0;
 
+		// Track click interaction timers for cleanup
+		let clickTimeoutId: number | undefined;
+		let clickIntervalId: number | undefined;
+
+		// Helper function to normalize rotation angle to -π to π range
+		const normalizeRotation = (rotDiff: number): number => {
+			while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+			while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+			return rotDiff;
+		};
+
 		const onWindowClick = (event: MouseEvent) => {
+			// Don't interrupt MCP-controlled behaviors
 			if (mcpOverrideActive) {
 				return;
 			}
 			createRipple(event.clientX, event.clientY);
 
-			currentAction = 'knocked';
-			setEyeColor('knocked');
+			// Clear any pending click timers
+			if (clickTimeoutId) {
+				clearTimeout(clickTimeoutId);
+				clickTimeoutId = undefined;
+			}
+			if (clickIntervalId) {
+				clearInterval(clickIntervalId);
+				clickIntervalId = undefined;
+			}
 
-			setTimeout(() => {
-				if (currentAction === 'knocked') {
-					currentAction = 'idle';
-					setEyeColor('idle');
-					if (isAutoMode) {
-						aiState = 'IDLE';
-						aiTimer = 0;
+			// Attention-getting mechanism: robot responds based on current state
+			const wasIdle = currentAction === 'idle' || currentAction === 'lookaround' || 
+							currentAction === 'stretch' || currentAction === 'shrug';
+			const wasSleeping = currentAction === 'sleep';
+			const wasWorking = ['coding', 'debugging', 'reviewing', 'refactoring', 'testing', 'reading', 'thinking'].includes(currentAction);
+
+			if (wasSleeping) {
+				// Wake up with a brief knocked reaction then wave
+				currentAction = 'knocked';
+				setEyeColor('knocked');
+				clickTimeoutId = window.setTimeout(() => {
+					if (currentAction === 'knocked') {
+						currentAction = 'wave';
+						setEyeColor('wave');
+						if (isAutoMode) {
+							aiState = 'IDLE';
+							aiTimer = 2;
+						}
 					}
-				}
-			}, 2000);
+					clickTimeoutId = undefined;
+				}, 1500);
+			} else if (wasWorking) {
+				// Brief acknowledgment without fully interrupting - just look at camera
+				// Make robot face the camera briefly
+				const targetRot = 0; // Face forward toward camera
+				// Smooth turn toward camera
+				clickIntervalId = window.setInterval(() => {
+					const currentDiff = targetRot - robot.rotation.y;
+					if (Math.abs(currentDiff) < 0.05) {
+						if (clickIntervalId) {
+							clearInterval(clickIntervalId);
+							clickIntervalId = undefined;
+						}
+					} else {
+						robot.rotation.y += currentDiff * 0.15;
+					}
+				}, 16);
+				clickTimeoutId = window.setTimeout(() => {
+					if (clickIntervalId) {
+						clearInterval(clickIntervalId);
+						clickIntervalId = undefined;
+					}
+					clickTimeoutId = undefined;
+				}, 500);
+			} else if (wasIdle) {
+				// Friendly wave response
+				currentAction = 'wave';
+				setEyeColor('wave');
+				clickTimeoutId = window.setTimeout(() => {
+					if (currentAction === 'wave') {
+						currentAction = 'idle';
+						setEyeColor('idle');
+						if (isAutoMode) {
+							aiState = 'IDLE';
+							aiTimer = 0;
+						}
+					}
+					clickTimeoutId = undefined;
+				}, 2000);
+			} else {
+				// For any other action, just make sure robot is facing camera
+				const targetRot = 0;
+				const rotDiff = normalizeRotation(targetRot - robot.rotation.y);
+				robot.rotation.y += rotDiff * 0.3; // Quick turn
+			}
 		};
 
 		window.addEventListener('click', onWindowClick);
@@ -538,6 +603,8 @@ export default function App() {
 			window.removeEventListener('message', onMessage);
 			cancelAnimationFrame(animationId);
 			if (resizeRaf) cancelAnimationFrame(resizeRaf);
+			if (clickTimeoutId) clearTimeout(clickTimeoutId);
+			if (clickIntervalId) clearInterval(clickIntervalId);
 			renderer.dispose();
 			container.removeChild(renderer.domElement);
 		};
