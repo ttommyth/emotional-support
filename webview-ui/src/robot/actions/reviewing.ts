@@ -6,6 +6,7 @@ import type { PropState } from './props';
 export const reviewing: RobotActionDefinition = {
 	name: 'reviewing',
 	tags: ['work'],
+	eyeColor: 'cyan',
 	apply: (t, { targets }) => {
 		const phase = t % 4;
 		targets.leftArm.rot.set(-0.9, 0, 0.4);

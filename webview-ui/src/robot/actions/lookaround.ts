@@ -3,6 +3,7 @@ import type { RobotActionDefinition } from '../types';
 export const lookaround: RobotActionDefinition = {
 	name: 'lookaround',
 	tags: ['idleLike', 'idleFiller'],
+	eyeColor: 'cyan',
 	apply: (t, { targets }) => {
 		const phase = t % 5;
 		if (phase < 2) {
@@ -21,7 +22,9 @@ export const lookaround: RobotActionDefinition = {
 			targets.head.rot.x = 0.04;
 			targets.body.rot.z = 0;
 		}
-		targets.leftArm.rot.z = 0.1;
-		targets.rightArm.rot.z = -0.1;
+		targets.leftArm.rot.z = -0.15;
+		targets.rightArm.rot.z = 0.15;
+		targets.leftArm.rot.y = -0.12;
+		targets.rightArm.rot.y = 0.12;
 	}
 };

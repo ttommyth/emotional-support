@@ -88,7 +88,8 @@ export default function App() {
 			eyeRed: 0xff5252,
 			eyeGreen: 0x1dd1a1,
 			eyeOff: 0x333333,
-			eyePurple: 0xa29bfe
+			eyePurple: 0xa29bfe,
+			eyeCalm: 0x5fbfc0
 		};
 
 		const matWhite = new MeshLambertMaterial({ color: colors.white });
@@ -311,7 +312,8 @@ export default function App() {
 		}
 
 		function setEyeColor(action: RobotActionName) {
-			matEye.color.setHex(getEyeColor(action, colors));
+			const desired = robotActions[action].eyeColor;
+			matEye.color.setHex(getEyeColor(colors, desired));
 		}
 
 		function updateAI(delta: number) {
@@ -679,9 +681,17 @@ export default function App() {
 				obj.rotation.y = MathUtils.lerp(obj.rotation.y, t.y, f);
 				obj.rotation.z = MathUtils.lerp(obj.rotation.z, t.z, f);
 			};
+			const lerpAngle = (current: number, target: number) => {
+				let diff = target - current;
+				while (diff > Math.PI) diff -= Math.PI * 2;
+				while (diff < -Math.PI) diff += Math.PI * 2;
+				return current + diff * f;
+			};
 
 			lerpV(bodyPivot.position, targets.body.pos);
-			lerpR(bodyPivot, targets.body.rot);
+			bodyPivot.rotation.x = MathUtils.lerp(bodyPivot.rotation.x, targets.body.rot.x, f);
+			bodyPivot.rotation.y = lerpAngle(bodyPivot.rotation.y, targets.body.rot.y);
+			bodyPivot.rotation.z = MathUtils.lerp(bodyPivot.rotation.z, targets.body.rot.z, f);
 			lerpV(headGroup.position, targets.head.pos);
 			lerpR(headGroup, targets.head.rot);
 			lerpV(leftArm.position, targets.leftArm.pos);

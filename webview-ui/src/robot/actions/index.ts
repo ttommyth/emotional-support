@@ -15,7 +15,10 @@ import { reading } from './reading';
 import { sleep } from './sleep';
 import { sit } from './sit';
 import { laydown } from './laydown';
+import { laydownflat } from './laydownflat';
 import { rest } from './rest';
+import { running } from './running';
+import { ballet } from './ballet';
 import { success } from './success';
 import { thinking } from './thinking';
 import { walk } from './walk';
@@ -36,7 +39,10 @@ export const robotActions: RobotActionMap = {
 	sleep,
 	sit,
 	laydown,
+	laydownflat,
 	rest,
+	running,
+	ballet,
 	walk,
 	wave,
 	stretch,

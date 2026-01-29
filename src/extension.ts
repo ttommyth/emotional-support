@@ -16,7 +16,22 @@ export function getOutputChannel(): vscode.OutputChannel {
 	return outputChannel;
 }
 
-const IDLE_ACTIONS: PetAction[] = ['idle', 'stretch', 'dance', 'lookaround', 'shrug', 'wave', 'sleep', 'walk'];
+const IDLE_ACTIONS: PetAction[] = [
+	'idle',
+	'stretch',
+	'dance',
+	'lookaround',
+	'shrug',
+	'wave',
+	'sleep',
+	'sit',
+	'laydown',
+	'laydownflat',
+	'rest',
+	'ballet',
+	'walk',
+	'running'
+];
 const CODING_ACTIONS: PetAction[] = [
 	'thinking',
 	'coding',
@@ -53,7 +68,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const UNFOCUSED_BACKOFF_BASE_MS = 15000; // 15 seconds
 	const UNFOCUSED_BACKOFF_MULTIPLIER = 1.9;
 	const UNFOCUSED_BACKOFF_STEPS = 3;
-	const UNFOCUSED_ACTIONS: PetAction[] = ['lookaround', 'stretch', 'shrug', 'peek', 'walk'];
+const UNFOCUSED_ACTIONS: PetAction[] = ['lookaround', 'stretch', 'shrug', 'peek', 'walk', 'sit', 'rest', 'laydownflat', 'ballet'];
 
 	const clearAllTimers = () => {
 		if (windowFocusTimer) {
@@ -667,4 +682,3 @@ function getNonce() {
 	}
 	return text;
 }
-

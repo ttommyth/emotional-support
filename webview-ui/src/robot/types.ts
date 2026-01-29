@@ -24,7 +24,10 @@ export type RobotActionName =
 	| 'sleep'
 	| 'sit'
 	| 'laydown'
+	| 'laydownflat'
 	| 'rest'
+	| 'running'
+	| 'ballet'
 	| 'walk'
 	| 'wave'
 	| 'stretch'
@@ -60,6 +63,8 @@ export type RobotActionTransition = {
 	apply: (progress: number, time: number, context: RobotActionContext) => void;
 };
 
+export type RobotEyeColorName = 'cyan' | 'red' | 'green' | 'off' | 'purple' | 'calm';
+
 export type RobotActionDefinition = {
 	name: RobotActionName;
 	apply: (time: number, context: RobotActionContext) => void;
@@ -67,6 +72,7 @@ export type RobotActionDefinition = {
 	pre?: RobotActionTransition;
 	post?: RobotActionTransition;
 	tags?: RobotActionTag[];
+	eyeColor?: RobotEyeColorName;
 };
 
 export type RobotActionMap = Record<RobotActionName, RobotActionDefinition>;

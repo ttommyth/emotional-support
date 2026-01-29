@@ -3,6 +3,7 @@ import type { RobotActionDefinition } from '../types';
 export const laydown: RobotActionDefinition = {
 	name: 'laydown',
 	tags: ['idleFiller', 'idleLike', 'restPose'],
+	eyeColor: 'calm',
 	pre: {
 		duration: 0.9,
 		apply: (p, _t, { targets }) => {
@@ -12,8 +13,8 @@ export const laydown: RobotActionDefinition = {
 			targets.body.rot.z = 0.1 * eased;
 			targets.leftLeg.rot.x = -1.2 * eased;
 			targets.rightLeg.rot.x = -1.2 * eased;
-			targets.leftArm.rot.set(-0.6 * eased, 0.1 * eased, 0.4 * eased);
-			targets.rightArm.rot.set(-0.6 * eased, -0.1 * eased, -0.4 * eased);
+			targets.leftArm.rot.set(-0.6 * eased, -0.15 * eased, -0.55 * eased);
+			targets.rightArm.rot.set(-0.6 * eased, 0.15 * eased, 0.55 * eased);
 			targets.head.rot.set(0.3 * eased, 0.15 * eased, 0.2 * eased);
 		}
 	},
@@ -24,23 +25,23 @@ export const laydown: RobotActionDefinition = {
 		targets.body.rot.z = 0.1 + Math.sin(t * 0.5) * 0.02;
 		targets.leftLeg.rot.x = -1.2;
 		targets.rightLeg.rot.x = -1.2;
-		targets.leftArm.rot.set(-0.6, 0.1, 0.4 + Math.sin(t * 0.8) * 0.05);
-		targets.rightArm.rot.set(-0.6, -0.1, -0.4 - Math.sin(t * 0.8) * 0.05);
+		targets.leftArm.rot.set(-0.6, -0.15, -0.55 + Math.sin(t * 0.8) * 0.04);
+		targets.rightArm.rot.set(-0.6, 0.15, 0.55 - Math.sin(t * 0.8) * 0.04);
 		targets.head.rot.x = 0.3 + Math.sin(t * 0.7) * 0.05;
 		targets.head.rot.y = Math.sin(t * 0.4) * 0.25;
 		targets.head.rot.z = 0.2 + Math.sin(t * 0.5) * 0.03;
 	},
 	post: {
-		duration: 0.9,
+		duration: 1.2,
 		apply: (p, _t, { targets }) => {
-			const eased = p * p * (3 - 2 * p);
+			const eased = p * p * p * (p * (6 * p - 15) + 10);
 			targets.body.pos.y = -1.6 * (1 - eased);
 			targets.body.rot.x = 0.35 * (1 - eased);
 			targets.body.rot.z = 0.1 * (1 - eased);
 			targets.leftLeg.rot.x = -1.2 * (1 - eased);
 			targets.rightLeg.rot.x = -1.2 * (1 - eased);
-			targets.leftArm.rot.set(-0.6 * (1 - eased), 0.1 * (1 - eased), 0.4 * (1 - eased));
-			targets.rightArm.rot.set(-0.6 * (1 - eased), -0.1 * (1 - eased), -0.4 * (1 - eased));
+			targets.leftArm.rot.set(-0.6 * (1 - eased), -0.15 * (1 - eased), -0.55 * (1 - eased));
+			targets.rightArm.rot.set(-0.6 * (1 - eased), 0.15 * (1 - eased), 0.55 * (1 - eased));
 			targets.head.rot.set(0.3 * (1 - eased), 0.15 * (1 - eased), 0.2 * (1 - eased));
 		}
 	}

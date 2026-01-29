@@ -1,4 +1,4 @@
-import type { RobotActionName } from '../types';
+import type { RobotEyeColorName } from '../types';
 
 type EyeColors = {
 	eyeCyan: number;
@@ -6,12 +6,19 @@ type EyeColors = {
 	eyeGreen: number;
 	eyeOff: number;
 	eyePurple: number;
+	eyeCalm: number;
 };
 
-export function getEyeColor(action: RobotActionName, colors: EyeColors) {
-	if (action === 'error') return colors.eyeRed;
-	if (action === 'success') return colors.eyeGreen;
-	if (action === 'sleep') return colors.eyeOff;
-	if (action === 'knocked') return colors.eyePurple;
-	return colors.eyeCyan;
+const eyeColorMap: Record<RobotEyeColorName, keyof EyeColors> = {
+	cyan: 'eyeCyan',
+	red: 'eyeRed',
+	green: 'eyeGreen',
+	off: 'eyeOff',
+	purple: 'eyePurple',
+	calm: 'eyeCalm'
+};
+
+export function getEyeColor(colors: EyeColors, desired?: RobotEyeColorName) {
+	const key = desired ? eyeColorMap[desired] : 'eyeCyan';
+	return colors[key];
 }

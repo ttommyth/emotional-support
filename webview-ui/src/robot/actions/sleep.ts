@@ -5,6 +5,7 @@ import type { RobotProps } from './props';
 export const sleep: RobotActionDefinition = {
 	name: 'sleep',
 	tags: ['idleFiller', 'sleep', 'blocksAutoLookAt', 'blocksBlink'],
+	eyeColor: 'off',
 	pre: {
 		duration: 0.9,
 		apply: (p, _t, { targets }) => {
@@ -22,9 +23,9 @@ export const sleep: RobotActionDefinition = {
 		targets.rightArm.rot.set(0, 0, 0);
 	},
 	post: {
-		duration: 0.8,
+		duration: 1.1,
 		apply: (p, _t, { targets }) => {
-			const eased = p * p * (3 - 2 * p);
+			const eased = p * p * p * (p * (6 * p - 15) + 10);
 			targets.body.pos.y = -0.5 * (1 - eased);
 			targets.head.rot.set(0.5 * (1 - eased), 0.2 * (1 - eased), 0.1 * (1 - eased));
 			targets.leftArm.rot.set(0, 0, 0);

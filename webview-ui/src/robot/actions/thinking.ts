@@ -5,6 +5,7 @@ import type { PropState } from './props';
 export const thinking: RobotActionDefinition = {
 	name: 'thinking',
 	tags: ['work'],
+	eyeColor: 'cyan',
 	apply: (t, { targets }) => {
 		targets.body.pos.y = Math.abs(Math.sin(t * 4)) * 0.1;
 		targets.body.rot.z = Math.sin(t * 2) * 0.05;

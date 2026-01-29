@@ -5,6 +5,7 @@ import type { PropState } from './props';
 export const success: RobotActionDefinition = {
 	name: 'success',
 	tags: ['work'],
+	eyeColor: 'green',
 	apply: (t, { targets }) => {
 		const jump = Math.abs(Math.sin(t * 8));
 		targets.body.pos.y = jump * 0.5;
