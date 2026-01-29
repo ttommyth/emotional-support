@@ -48,13 +48,25 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Window focus monitoring for behavior adjustments
 	let windowFocusTimer: NodeJS.Timeout | undefined;
+	let followUpTimer: NodeJS.Timeout | undefined; // For multi-step behaviors
 	let lastFocusLostTime: number | undefined;
 	const UNFOCUSED_LOOKAROUND_DELAY_MS = 30000; // 30 seconds - brief check
 	const UNFOCUSED_SLEEP_DELAY_MS = 120000; // 2 minutes
 	const UNFOCUSED_WALK_AWAY_DELAY_MS = 180000; // 3 minutes
 
-	const handleWindowStateChange = () => {
-		const isFocused = vscode.window.state.focused;
+	const clearAllTimers = () => {
+		if (windowFocusTimer) {
+			clearTimeout(windowFocusTimer);
+			windowFocusTimer = undefined;
+		}
+		if (followUpTimer) {
+			clearTimeout(followUpTimer);
+			followUpTimer = undefined;
+		}
+	};
+
+	const handleWindowStateChange = (state: vscode.WindowState) => {
+		const isFocused = state.focused;
 		
 		if (!isFocused) {
 			// Window lost focus
@@ -62,16 +74,19 @@ export function activate(context: vscode.ExtensionContext) {
 				lastFocusLostTime = Date.now();
 			}
 			
-			// Clear any existing timer
-			if (windowFocusTimer) {
-				clearTimeout(windowFocusTimer);
-			}
+			// Clear any existing timers
+			clearAllTimers();
 			
 			// Schedule behavior changes based on inactive duration
 			const scheduleNextBehavior = (delay: number) => {
 				windowFocusTimer = setTimeout(() => {
 					if (!vscode.window.state.focused && petViewProvider.isReady()) {
-						const elapsedTime = Date.now() - (lastFocusLostTime ?? Date.now());
+						if (!lastFocusLostTime) {
+							// Safety check - shouldn't happen but handle gracefully
+							return;
+						}
+						
+						const elapsedTime = Date.now() - lastFocusLostTime;
 						
 						if (elapsedTime >= UNFOCUSED_WALK_AWAY_DELAY_MS) {
 							// Walk away behavior - robot moves around and sleeps
@@ -81,8 +96,8 @@ export function activate(context: vscode.ExtensionContext) {
 								durationSeconds: 3
 							});
 							
-							// Then sleep
-							setTimeout(() => {
+							// Then sleep (store timer so it can be cleared)
+							followUpTimer = setTimeout(() => {
 								if (!vscode.window.state.focused && petViewProvider.isReady()) {
 									petViewProvider.setMood({ 
 										mood: 'sleep', 
@@ -135,9 +150,9 @@ export function activate(context: vscode.ExtensionContext) {
 							durationSeconds: 3
 						});
 						
-						// Then wave based on time away
-						setTimeout(() => {
-							if (petViewProvider.isReady()) {
+						// Then wave based on time away (store timer so it can be cleared)
+						followUpTimer = setTimeout(() => {
+							if (petViewProvider.isReady() && vscode.window.state.focused) {
 								const greeting = inactiveTimeMin > 10 
 									? 'Long time no see! 👋' 
 									: inactiveTimeMin > 3 
@@ -158,7 +173,7 @@ export function activate(context: vscode.ExtensionContext) {
 							durationSeconds: 2
 						});
 					} else if (inactiveTimeMs < UNFOCUSED_LOOKAROUND_DELAY_MS) {
-						// Very brief absence, just a quick peek
+						// Brief absence (less than 30 seconds), just a quick peek
 						petViewProvider.setMood({ 
 							mood: 'peek', 
 							message: 'Quick check...',
@@ -171,10 +186,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			
 			// Clear any pending timers
-			if (windowFocusTimer) {
-				clearTimeout(windowFocusTimer);
-				windowFocusTimer = undefined;
-			}
+			clearAllTimers();
 			
 			getOutputChannel().appendLine(`[WindowMonitor] Window gained focus at ${new Date().toISOString()}`);
 		}
@@ -182,13 +194,18 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Monitor window state changes
 	context.subscriptions.push(
-		vscode.window.onDidChangeWindowState((state) => {
-			handleWindowStateChange();
-		})
+		vscode.window.onDidChangeWindowState(handleWindowStateChange)
 	);
 
 	// Check initial state
-	handleWindowStateChange();
+	handleWindowStateChange(vscode.window.state);
+
+	// Cleanup timers on deactivation
+	context.subscriptions.push({
+		dispose: () => {
+			clearAllTimers();
+		}
+	});
 
 	context.subscriptions.push(moodService);
 	context.subscriptions.push(
