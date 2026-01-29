@@ -1,7 +1,7 @@
 ---
 description: Works on VS Code extension core, commands, and webview wiring
 mode: subagent
-model: gpt-5-mini
+model: openai/gpt-5-mini
 temperature: 0.2
 tools:
   write: true

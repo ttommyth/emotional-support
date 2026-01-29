@@ -1,7 +1,7 @@
 ---
 description: Runs tests, typechecks, and lint for the extension
 mode: subagent
-model: gpt-5-mini
+model: openai/gpt-5-mini
 temperature: 0.1
 tools:
   write: false

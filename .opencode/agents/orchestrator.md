@@ -1,7 +1,7 @@
 ---
 description: Orchestrates multi-area work by delegating to specialists
 mode: subagent
-model: gpt-5-mini
+model: openai/gpt-5-mini
 temperature: 0.2
 tools:
   write: false

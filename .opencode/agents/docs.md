@@ -1,7 +1,7 @@
 ---
 description: Writes and updates project documentation
 mode: subagent
-model: gpt-5-mini
+model: openai/gpt-5-mini
 temperature: 0.3
 tools:
   write: true

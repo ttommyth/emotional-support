@@ -22,6 +22,9 @@ export type RobotActionName =
 	| 'success'
 	| 'error'
 	| 'sleep'
+	| 'sit'
+	| 'laydown'
+	| 'rest'
 	| 'walk'
 	| 'wave'
 	| 'stretch'
@@ -45,6 +48,7 @@ export type RobotActionTag =
 	| 'work'
 	| 'sleep'
 	| 'movement'
+	| 'restPose'
 	| 'blocksAutoLookAt'
 	| 'blocksBlink'
 	| 'skipPost';

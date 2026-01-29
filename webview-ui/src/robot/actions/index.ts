@@ -13,6 +13,9 @@ import { shrug } from './shrug';
 import { knocked } from './knocked';
 import { reading } from './reading';
 import { sleep } from './sleep';
+import { sit } from './sit';
+import { laydown } from './laydown';
+import { rest } from './rest';
 import { success } from './success';
 import { thinking } from './thinking';
 import { walk } from './walk';
@@ -31,6 +34,9 @@ export const robotActions: RobotActionMap = {
 	success,
 	error,
 	sleep,
+	sit,
+	laydown,
+	rest,
 	walk,
 	wave,
 	stretch,
