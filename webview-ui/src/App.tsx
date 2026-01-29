@@ -209,6 +209,7 @@ export default function App() {
 		let mcpRequestedAction: RobotActionName | undefined;
 		let mcpDurationTimer = 0;
 		let mcpTimeoutId = 0;
+		let forcedMoveTarget: 'front' | 'left' | 'right' | undefined;
 		const moveTarget = new Vector3();
 		const forwardDir = new Vector3(0, 0, 1);
 		const toCameraDir = new Vector3();
@@ -263,7 +264,9 @@ export default function App() {
 						setRobotAction('idle');
 					}
 				}
-				return;
+				if (currentAction !== 'walk' || aiState !== 'MOVING') {
+					return;
+				}
 			}
 
 			if (!isAutoMode) return;
@@ -313,6 +316,7 @@ export default function App() {
 						const isSidePeek = Math.abs(robot.position.x) > moveBounds.x * 0.2;
 						currentAction = isSidePeek ? 'peek' : 'wave';
 						aiTimer = isSidePeek ? 3.6 : 3;
+						forcedMoveTarget = undefined;
 						const targetRot = 0;
 						let rotDiff = targetRot - robot.rotation.y;
 						while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
@@ -322,6 +326,7 @@ export default function App() {
 						aiState = 'IDLE';
 						currentAction = 'idle';
 						aiTimer = 1;
+						forcedMoveTarget = undefined;
 					}
 				} else {
 					direction.normalize();
@@ -364,6 +369,9 @@ export default function App() {
 		// Track click interaction timers for cleanup
 		let clickTimeoutId: number | undefined;
 		let clickIntervalId: number | undefined;
+		let lastClickTime = 0;
+		let clickTargetRotation = 0;
+		let clickTurnSpeed = 0.08;
 
 		// Helper function to normalize rotation angle to -π to π range
 		const normalizeRotation = (rotDiff: number): number => {
@@ -373,11 +381,54 @@ export default function App() {
 		};
 
 		const onWindowClick = (event: MouseEvent) => {
-			// Don't interrupt MCP-controlled behaviors
-			if (mcpOverrideActive) {
+			createRipple(event.clientX, event.clientY);
+			const rect = containerEl.getBoundingClientRect();
+			const normalizedX = MathUtils.clamp(((event.clientX - rect.left) / rect.width - 0.5) * 2, -1, 1);
+			const maxYaw = 0.9;
+			clickTargetRotation = normalizedX * maxYaw;
+			const now = performance.now();
+			const clickDelta = lastClickTime > 0 ? now - lastClickTime : 1000;
+			lastClickTime = now;
+			const rapidFactor = MathUtils.clamp((250 - clickDelta) / 250, 0, 1);
+			clickTurnSpeed = MathUtils.lerp(0.06, 0.25, rapidFactor);
+			const acceptChance = MathUtils.lerp(0.35, 0.85, MathUtils.clamp(clickDelta / 600, 0, 1));
+			if (Math.random() > acceptChance) {
 				return;
 			}
-			createRipple(event.clientX, event.clientY);
+
+			// Stop current action/destination before reacting
+			if (mcpOverrideActive) {
+				mcpOverrideActive = false;
+				mcpRequestedAction = 'idle';
+				mcpDurationTimer = 0;
+				if (mcpTimeoutId) {
+					window.clearTimeout(mcpTimeoutId);
+					mcpTimeoutId = 0;
+				}
+			}
+			if (aiState === 'MOVING') {
+				moveTarget.copy(robot.position);
+				aiState = 'IDLE';
+				aiTimer = 0;
+			}
+
+			const scheduleLookAt = () => {
+				if (clickIntervalId) {
+					clearInterval(clickIntervalId);
+					clickIntervalId = undefined;
+				}
+				clickIntervalId = window.setInterval(() => {
+					const currentDiff = normalizeRotation(clickTargetRotation - robot.rotation.y);
+					if (Math.abs(currentDiff) < 0.02) {
+						if (clickIntervalId) {
+							clearInterval(clickIntervalId);
+							clickIntervalId = undefined;
+						}
+					} else {
+						robot.rotation.y += currentDiff * clickTurnSpeed;
+					}
+				}, 16);
+			};
 
 			// Clear any pending click timers
 			if (clickTimeoutId) {
@@ -399,6 +450,7 @@ export default function App() {
 				// Wake up with a brief knocked reaction then wave
 				currentAction = 'knocked';
 				setEyeColor('knocked');
+				scheduleLookAt();
 				clickTimeoutId = window.setTimeout(() => {
 					if (currentAction === 'knocked') {
 						currentAction = 'wave';
@@ -412,20 +464,7 @@ export default function App() {
 				}, 1500);
 			} else if (wasWorking) {
 				// Brief acknowledgment without fully interrupting - just look at camera
-				// Make robot face the camera briefly
-				const targetRot = 0; // Face forward toward camera
-				// Smooth turn toward camera
-				clickIntervalId = window.setInterval(() => {
-					const currentDiff = targetRot - robot.rotation.y;
-					if (Math.abs(currentDiff) < 0.05) {
-						if (clickIntervalId) {
-							clearInterval(clickIntervalId);
-							clickIntervalId = undefined;
-						}
-					} else {
-						robot.rotation.y += currentDiff * 0.15;
-					}
-				}, 16);
+				scheduleLookAt();
 				clickTimeoutId = window.setTimeout(() => {
 					if (clickIntervalId) {
 						clearInterval(clickIntervalId);
@@ -437,6 +476,7 @@ export default function App() {
 				// Friendly wave response
 				currentAction = 'wave';
 				setEyeColor('wave');
+				scheduleLookAt();
 				clickTimeoutId = window.setTimeout(() => {
 					if (currentAction === 'wave') {
 						currentAction = 'idle';
@@ -449,10 +489,8 @@ export default function App() {
 					clickTimeoutId = undefined;
 				}, 2000);
 			} else {
-				// For any other action, just make sure robot is facing camera
-				const targetRot = 0;
-				const rotDiff = normalizeRotation(targetRot - robot.rotation.y);
-				robot.rotation.y += rotDiff * 0.3; // Quick turn
+				// For any other action, try to look toward the click direction
+				scheduleLookAt();
 			}
 		};
 
@@ -464,6 +502,15 @@ export default function App() {
 				setRobotAction(message.mood);
 				mcpRequestedAction = message.mood;
 				mcpOverrideActive = message.mood !== 'idle';
+				if (message.mood === 'walk') {
+					aiState = 'MOVING';
+					moveTarget.set(
+						(Math.random() - 0.5) * moveBounds.x * 0.7,
+						0,
+						Math.random() * moveBounds.zRange + moveBounds.zNear + 2
+					);
+					forcedMoveTarget = undefined;
+				}
 				mcpDurationTimer = typeof message?.durationSeconds === 'number' && message.durationSeconds > 0
 					? message.durationSeconds
 					: 0;
@@ -502,6 +549,7 @@ export default function App() {
 				aiState = 'MOVING';
 				aiTimer = 4;
 				moveTarget.copy(target);
+				forcedMoveTarget = message.target as 'front' | 'left' | 'right';
 				setRobotAction('walk');
 				return;
 			}
@@ -514,6 +562,13 @@ export default function App() {
 			const time = clock.getElapsedTime();
 
 			updateAI(delta);
+			if (aiState !== 'MOVING' && currentAction !== 'walk' && currentAction !== 'peek' && currentAction !== 'sleep') {
+				const facingDot = getFacingDot();
+				if (facingDot < 0.5) {
+					const rotDiff = normalizeRotation(0 - robot.rotation.y);
+					robot.rotation.y += rotDiff * 0.05;
+				}
+			}
 			resetTargets();
 			robotActions[currentAction].apply(time, actionContext);
 			robotActions[currentAction].update?.(delta, time, actionContext);
