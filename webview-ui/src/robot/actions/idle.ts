@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const idle: RobotActionDefinition = {
 	name: 'idle',
+	tags: ['idleLike', 'idleFiller'],
 	apply: (t, { targets }) => {
 		targets.body.pos.y = Math.sin(t * 1.5) * 0.1;
 		targets.leftArm.rot.z = 0.1;

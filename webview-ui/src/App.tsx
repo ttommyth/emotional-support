@@ -24,7 +24,7 @@ import {
 	WebGLRenderer
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry';
-import { idleFillerActions, robotActions } from './robot/actions';
+import { getActionsByTag, robotActions } from './robot/actions';
 import { getEyeColor } from './robot/actions/eyes';
 import { createRobotProps, updateProps } from './robot/actions/props';
 import type { RobotActionContext, RobotActionName, RobotTargets } from './robot/types';
@@ -202,6 +202,9 @@ export default function App() {
 		}
 
 		let currentAction: RobotActionName = 'idle';
+		let queuedAction: RobotActionName | undefined;
+		let actionPhase: 'pre' | 'main' | 'post' = 'main';
+		let actionPhaseTimer = 0;
 		let isAutoMode = true;
 		let aiState = 'IDLE';
 		let aiTimer = 0;
@@ -209,7 +212,10 @@ export default function App() {
 		let mcpRequestedAction: RobotActionName | undefined;
 		let mcpDurationTimer = 0;
 		let mcpTimeoutId = 0;
-		let forcedMoveTarget: 'front' | 'left' | 'right' | undefined;
+		let isUnfocused = document.hidden || !document.hasFocus();
+		let unfocusedIdleTimer = 0;
+		const unfocusedSleepDelay = 20;
+		
 		const moveTarget = new Vector3();
 		const forwardDir = new Vector3(0, 0, 1);
 		const toCameraDir = new Vector3();
@@ -242,12 +248,66 @@ export default function App() {
 		const isRobotAction = (value: string): value is RobotActionName => value in robotActions;
 
 		function setRobotAction(action: RobotActionName, btn?: HTMLElement | null) {
-			currentAction = action;
+			if (currentAction !== action) {
+				const currentDef = robotActions[currentAction];
+				const shouldUsePost =
+					actionPhase !== 'post' &&
+					currentDef.post &&
+					!(currentDef.tags?.includes('skipPost') ?? false) &&
+					!mcpOverrideActive;
+				if (shouldUsePost) {
+					queuedAction = action;
+					actionPhase = 'post';
+					actionPhaseTimer = 0;
+				} else {
+					queuedAction = undefined;
+					currentAction = action;
+					actionPhaseTimer = 0;
+					const hasPre = Boolean(robotActions[action].pre);
+					actionPhase = hasPre ? 'pre' : 'main';
+				}
+			}
 			if (btn) {
 				document.querySelectorAll('.btn').forEach((b) => b.classList.remove('active'));
 				btn.classList.add('active');
 			}
-			setEyeColor(action);
+			setEyeColor(currentAction);
+		}
+
+		function resolveActionTransition(delta: number) {
+			const actionDef = robotActions[currentAction];
+			actionPhaseTimer += delta;
+			if (actionPhase === 'pre') {
+				const duration = actionDef.pre?.duration ?? 0;
+				if (duration <= 0) {
+					actionPhase = 'main';
+					actionPhaseTimer = 0;
+				} else if (actionPhaseTimer >= duration) {
+					actionPhase = 'main';
+					actionPhaseTimer -= duration;
+				}
+				return;
+			}
+
+			if (actionPhase === 'main') {
+				return;
+			}
+
+			if (actionPhase === 'post') {
+				const duration = actionDef.post?.duration ?? 0;
+				if (duration <= 0 || actionPhaseTimer >= duration) {
+					actionPhase = 'main';
+					actionPhaseTimer = 0;
+					if (queuedAction) {
+						const nextAction = queuedAction;
+						queuedAction = undefined;
+						currentAction = nextAction;
+						const hasPre = Boolean(robotActions[nextAction].pre);
+						actionPhase = hasPre ? 'pre' : 'main';
+						setEyeColor(currentAction);
+					}
+				}
+			}
 		}
 
 		function setEyeColor(action: RobotActionName) {
@@ -258,18 +318,18 @@ export default function App() {
 			if (mcpOverrideActive) {
 				if (mcpDurationTimer > 0) {
 					mcpDurationTimer = Math.max(0, mcpDurationTimer - delta);
-					if (mcpDurationTimer <= 0 && mcpRequestedAction && mcpRequestedAction !== 'idle') {
-						mcpOverrideActive = false;
-						mcpRequestedAction = 'idle';
-						setRobotAction('idle');
-					}
+			if (mcpDurationTimer <= 0 && mcpRequestedAction && mcpRequestedAction !== 'idle') {
+				mcpOverrideActive = false;
+				mcpRequestedAction = 'idle';
+				setRobotAction('idle');
+			}
 				}
-				if (currentAction !== 'walk' || aiState !== 'MOVING') {
-					return;
-				}
+			if (!(robotActions[currentAction].tags?.includes('movement') ?? false) || aiState !== 'MOVING') {
+				return;
+			}
 			}
 
-			if (!isAutoMode) return;
+			if (!isAutoMode || robotActions[currentAction].tags?.includes('sleep')) return;
 
 			aiTimer -= delta;
 
@@ -291,18 +351,19 @@ export default function App() {
 							0,
 							(Math.random() - 0.5) * moveBounds.zRange + moveBounds.zNear
 						);
-						currentAction = 'walk';
+						setRobotAction('walk');
 					} else if (r < moveChance + performChance) {
-						const acts = idleFillerActions;
-						currentAction = acts[Math.floor(Math.random() * acts.length)];
+						const acts = getActionsByTag('idleFiller');
+						if (acts.length > 0) {
+							setRobotAction(acts[Math.floor(Math.random() * acts.length)]);
+						}
 						aiState = 'PERFORMING';
 						aiTimer = 3 + Math.random() * 4;
-						setEyeColor(currentAction);
 					} else {
 						aiState = 'MOVING';
 						const peekTarget = peekTargets[Math.floor(Math.random() * peekTargets.length)];
 						moveTarget.copy(peekTarget);
-						currentAction = 'walk';
+						setRobotAction('walk');
 					}
 				}
 			} else if (aiState === 'MOVING') {
@@ -314,9 +375,9 @@ export default function App() {
 					if (robot.position.z > 8) {
 						aiState = 'PERFORMING';
 						const isSidePeek = Math.abs(robot.position.x) > moveBounds.x * 0.2;
-						currentAction = isSidePeek ? 'peek' : 'wave';
+						setRobotAction(isSidePeek ? 'peek' : 'wave');
 						aiTimer = isSidePeek ? 3.6 : 3;
-						forcedMoveTarget = undefined;
+						
 						const targetRot = 0;
 						let rotDiff = targetRot - robot.rotation.y;
 						while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
@@ -324,9 +385,9 @@ export default function App() {
 						robot.rotation.y = targetRot;
 					} else {
 						aiState = 'IDLE';
-						currentAction = 'idle';
+						setRobotAction('idle');
 						aiTimer = 1;
-						forcedMoveTarget = undefined;
+						
 					}
 				} else {
 					direction.normalize();
@@ -345,7 +406,7 @@ export default function App() {
 			} else if (aiState === 'PERFORMING') {
 				if (aiTimer <= 0) {
 					aiState = 'IDLE';
-					currentAction = 'idle';
+					setRobotAction('idle');
 					aiTimer = 0.5;
 				}
 			}
@@ -441,20 +502,17 @@ export default function App() {
 			}
 
 			// Attention-getting mechanism: robot responds based on current state
-			const wasIdle = currentAction === 'idle' || currentAction === 'lookaround' || 
-							currentAction === 'stretch' || currentAction === 'shrug';
-			const wasSleeping = currentAction === 'sleep';
-			const wasWorking = ['coding', 'debugging', 'reviewing', 'refactoring', 'testing', 'reading', 'thinking'].includes(currentAction);
+			const wasIdle = robotActions[currentAction].tags?.includes('idleLike') ?? false;
+			const wasSleeping = robotActions[currentAction].tags?.includes('sleep') ?? false;
+			const wasWorking = robotActions[currentAction].tags?.includes('work') ?? false;
 
 			if (wasSleeping) {
 				// Wake up with a brief knocked reaction then wave
-				currentAction = 'knocked';
-				setEyeColor('knocked');
+				setRobotAction('knocked');
 				scheduleLookAt();
 				clickTimeoutId = window.setTimeout(() => {
 					if (currentAction === 'knocked') {
-						currentAction = 'wave';
-						setEyeColor('wave');
+						setRobotAction('wave');
 						if (isAutoMode) {
 							aiState = 'IDLE';
 							aiTimer = 2;
@@ -474,13 +532,11 @@ export default function App() {
 				}, 500);
 			} else if (wasIdle) {
 				// Friendly wave response
-				currentAction = 'wave';
-				setEyeColor('wave');
+				setRobotAction('wave');
 				scheduleLookAt();
 				clickTimeoutId = window.setTimeout(() => {
 					if (currentAction === 'wave') {
-						currentAction = 'idle';
-						setEyeColor('idle');
+						setRobotAction('idle');
 						if (isAutoMode) {
 							aiState = 'IDLE';
 							aiTimer = 0;
@@ -496,6 +552,16 @@ export default function App() {
 
 		window.addEventListener('click', onWindowClick);
 
+		const updateFocusState = () => {
+			isUnfocused = document.hidden || !document.hasFocus();
+			if (!isUnfocused) {
+				unfocusedIdleTimer = 0;
+			}
+		};
+		window.addEventListener('blur', updateFocusState);
+		window.addEventListener('focus', updateFocusState);
+		document.addEventListener('visibilitychange', updateFocusState);
+
 		const onMessage = (event: MessageEvent) => {
 			const message = event.data;
 			if (message?.command === 'SET_MOOD' && typeof message?.mood === 'string' && isRobotAction(message.mood)) {
@@ -509,7 +575,7 @@ export default function App() {
 						0,
 						Math.random() * moveBounds.zRange + moveBounds.zNear + 2
 					);
-					forcedMoveTarget = undefined;
+					
 				}
 				mcpDurationTimer = typeof message?.durationSeconds === 'number' && message.durationSeconds > 0
 					? message.durationSeconds
@@ -549,7 +615,7 @@ export default function App() {
 				aiState = 'MOVING';
 				aiTimer = 4;
 				moveTarget.copy(target);
-				forcedMoveTarget = message.target as 'front' | 'left' | 'right';
+				
 				setRobotAction('walk');
 				return;
 			}
@@ -562,7 +628,30 @@ export default function App() {
 			const time = clock.getElapsedTime();
 
 			updateAI(delta);
-			if (aiState !== 'MOVING' && currentAction !== 'walk' && currentAction !== 'peek' && currentAction !== 'sleep') {
+			if (isUnfocused && !mcpOverrideActive && !robotActions[currentAction].tags?.includes('movement')) {
+				const isIdleish =
+					aiState === 'IDLE' &&
+					(robotActions[currentAction].tags?.includes('idleLike') ?? false);
+				if (isIdleish) {
+					unfocusedIdleTimer += delta;
+					if (unfocusedIdleTimer >= unfocusedSleepDelay && !robotActions[currentAction].tags?.includes('sleep')) {
+						setRobotAction('sleep');
+						if (isAutoMode) {
+							aiState = 'PERFORMING';
+							aiTimer = 9999;
+						}
+					}
+				} else {
+					unfocusedIdleTimer = 0;
+				}
+			} else {
+				unfocusedIdleTimer = 0;
+			}
+			if (
+				aiState !== 'MOVING' &&
+				!(robotActions[currentAction].tags?.includes('blocksAutoLookAt') ?? false) &&
+				!(robotActions[currentAction].tags?.includes('sleep') ?? false)
+			) {
 				const facingDot = getFacingDot();
 				if (facingDot < 0.5) {
 					const rotDiff = normalizeRotation(0 - robot.rotation.y);
@@ -570,8 +659,18 @@ export default function App() {
 				}
 			}
 			resetTargets();
-			robotActions[currentAction].apply(time, actionContext);
-			robotActions[currentAction].update?.(delta, time, actionContext);
+			resolveActionTransition(delta);
+			const actionDef = robotActions[currentAction];
+			if (actionPhase === 'pre' && actionDef.pre) {
+				const progress = MathUtils.clamp(actionPhaseTimer / Math.max(actionDef.pre.duration, 0.001), 0, 1);
+				actionDef.pre.apply(progress, time, actionContext);
+			} else if (actionPhase === 'post' && actionDef.post) {
+				const progress = MathUtils.clamp(actionPhaseTimer / Math.max(actionDef.post.duration, 0.001), 0, 1);
+				actionDef.post.apply(progress, time, actionContext);
+			} else {
+				actionDef.apply(time, actionContext);
+			}
+			actionDef.update?.(delta, time, actionContext);
 
 			const f = 0.1;
 			const lerpV = (c: Vector3, t: Vector3) => c.lerp(t, f);
@@ -595,7 +694,10 @@ export default function App() {
 			robot.updateMatrixWorld(true);
 			updateProps(delta, currentAction, props);
 
-			if (currentAction !== 'sleep' && currentAction !== 'error') {
+			if (
+				!(robotActions[currentAction].tags?.includes('sleep') ?? false) &&
+				!(robotActions[currentAction].tags?.includes('blocksBlink') ?? false)
+			) {
 				timeSinceLastBlink += delta;
 				if (!isBlinking && timeSinceLastBlink > 2 + Math.random() * 3) {
 					isBlinking = true;
@@ -611,7 +713,7 @@ export default function App() {
 				leftEye.scale.y = MathUtils.lerp(leftEye.scale.y, targetScale, 0.5);
 				rightEye.scale.y = MathUtils.lerp(rightEye.scale.y, targetScale, 0.5);
 			} else {
-				const s = currentAction === 'sleep' ? 0.1 : 1;
+				const s = robotActions[currentAction].tags?.includes('sleep') ? 0.1 : 1;
 				leftEye.scale.y = MathUtils.lerp(leftEye.scale.y, s, 0.1);
 				rightEye.scale.y = MathUtils.lerp(rightEye.scale.y, s, 0.1);
 			}
@@ -653,6 +755,9 @@ export default function App() {
 
 		return () => {
 			window.removeEventListener('click', onWindowClick);
+			window.removeEventListener('blur', updateFocusState);
+			window.removeEventListener('focus', updateFocusState);
+			document.removeEventListener('visibilitychange', updateFocusState);
 			window.removeEventListener('resize', scheduleResize);
 			resizeObserver.disconnect();
 			window.removeEventListener('message', onMessage);

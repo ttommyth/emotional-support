@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const knocked: RobotActionDefinition = {
 	name: 'knocked',
+	tags: ['blocksAutoLookAt'],
 	apply: (t, { targets }) => {
 		targets.body.pos.y = Math.max(0, Math.sin(t * 15)) * 1;
 		targets.head.rot.x = -0.2;

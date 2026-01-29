@@ -5,6 +5,7 @@ import type { PropState } from './props';
 
 export const reading: RobotActionDefinition = {
 	name: 'reading',
+	tags: ['work'],
 	apply: (t, { targets }) => {
 		targets.leftArm.rot.set(-1.0, 0, 0.5);
 		targets.rightArm.rot.set(-1.0, 0, -0.5);

@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const stretch: RobotActionDefinition = {
 	name: 'stretch',
+	tags: ['idleLike', 'idleFiller'],
 	apply: (t, { targets }) => {
 		const phase = t % 6;
 		const lift = Math.abs(Math.sin(t * 0.9)) * 0.18;

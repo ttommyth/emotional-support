@@ -6,6 +6,7 @@ const tempCam = new THREE.Vector3();
 
 export const peek: RobotActionDefinition = {
 	name: 'peek',
+	tags: ['blocksAutoLookAt', 'movement'],
 	apply: (t, { targets, robot, camera }) => {
 		const side = robot.position.x >= 0 ? 1 : -1;
 		const bob = Math.sin(t * 2.4) * 0.07;

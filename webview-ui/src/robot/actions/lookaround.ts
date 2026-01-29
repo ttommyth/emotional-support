@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const lookaround: RobotActionDefinition = {
 	name: 'lookaround',
+	tags: ['idleLike', 'idleFiller'],
 	apply: (t, { targets }) => {
 		const phase = t % 5;
 		if (phase < 2) {

@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const walk: RobotActionDefinition = {
 	name: 'walk',
+	tags: ['blocksAutoLookAt', 'skipPost', 'movement'],
 	apply: (t, { targets }) => {
 		const speed = 10;
 		targets.body.pos.y = Math.abs(Math.sin(t * speed)) * 0.2;

@@ -4,6 +4,7 @@ import type { PropState } from './props';
 
 export const debugging: RobotActionDefinition = {
 	name: 'debugging',
+	tags: ['work'],
 	apply: (t, { targets }) => {
 		const phase = t % 4.5;
 		targets.body.pos.y = Math.sin(t * 1.2) * 0.03;

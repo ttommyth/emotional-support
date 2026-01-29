@@ -39,10 +39,30 @@ export type RobotActionContext = {
 	camera: THREE.Camera;
 };
 
+export type RobotActionTag =
+	| 'idleLike'
+	| 'idleFiller'
+	| 'work'
+	| 'sleep'
+	| 'movement'
+	| 'blocksAutoLookAt'
+	| 'blocksBlink'
+	| 'skipPost';
+
+export type RobotActionPhase = 'pre' | 'main' | 'post';
+
+export type RobotActionTransition = {
+	duration: number;
+	apply: (progress: number, time: number, context: RobotActionContext) => void;
+};
+
 export type RobotActionDefinition = {
 	name: RobotActionName;
 	apply: (time: number, context: RobotActionContext) => void;
 	update?: (delta: number, time: number, context: RobotActionContext) => void;
+	pre?: RobotActionTransition;
+	post?: RobotActionTransition;
+	tags?: RobotActionTag[];
 };
 
 export type RobotActionMap = Record<RobotActionName, RobotActionDefinition>;

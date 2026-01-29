@@ -4,6 +4,7 @@ import type { PropState } from './props';
 
 export const testing: RobotActionDefinition = {
 	name: 'testing',
+	tags: ['work'],
 	apply: (t, { targets }) => {
 		const phase = t % 3;
 		const tap = Math.sin(t * 12) * 0.05;

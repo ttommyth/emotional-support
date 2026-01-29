@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const shrug: RobotActionDefinition = {
 	name: 'shrug',
+	tags: ['idleLike', 'idleFiller'],
 	apply: (t, { targets }) => {
 		const phase = t % 3;
 		if (phase < 1) {

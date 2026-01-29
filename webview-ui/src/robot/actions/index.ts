@@ -1,4 +1,4 @@
-import type { RobotActionMap } from '../types';
+import type { RobotActionMap, RobotActionName, RobotActionTag } from '../types';
 import { coding } from './coding';
 import { debugging } from './debugging';
 import { reviewing } from './reviewing';
@@ -41,16 +41,10 @@ export const robotActions: RobotActionMap = {
 	peek
 };
 
-export const codingActions = [
-	'coding',
-	'debugging',
-	'reviewing',
-	'refactoring',
-	'testing',
-	'thinking',
-	'reading',
-	'success',
-	'error'
-] as const;
+export function actionHasTag(action: RobotActionName, tag: RobotActionTag): boolean {
+	return robotActions[action].tags?.includes(tag) ?? false;
+}
 
-export const idleFillerActions = ['idle', 'stretch', 'dance', 'lookaround', 'shrug', 'wave', 'sleep'] as const;
+export function getActionsByTag(tag: RobotActionTag): RobotActionName[] {
+	return (Object.keys(robotActions) as RobotActionName[]).filter((name) => actionHasTag(name, tag));
+}

@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const wave: RobotActionDefinition = {
 	name: 'wave',
+	tags: ['idleFiller'],
 	apply: (t, { targets }) => {
 		const phase = t % 3.5;
 		targets.rightArm.pos.y = 1.15;

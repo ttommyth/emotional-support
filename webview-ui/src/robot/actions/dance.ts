@@ -2,6 +2,7 @@ import type { RobotActionDefinition } from '../types';
 
 export const dance: RobotActionDefinition = {
 	name: 'dance',
+	tags: ['idleFiller'],
 	apply: (t, { targets }) => {
 		const phase = t % 4;
 		const sway = Math.sin(t * 2.2) * 0.16;
