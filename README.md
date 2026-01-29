@@ -13,10 +13,14 @@ The live demo showcases the 3D robot companion with all its animations and inter
 - Webview panel with a 3D robot companion with various animations
 - Extension-to-webview messaging channel
 - Pet mood service stub ready to wire into an automation or AI bridge
-- **Window Status Monitoring**: The robot adjusts its behavior based on VS Code window focus state
-  - After 2 minutes of inactivity, the robot falls asleep
-  - After 3 minutes of inactivity, the robot walks away and then sleeps
-  - When you return and focus the window, the robot wakes up with a stretch and waves to welcome you back
+- **Adaptive Window Status Monitoring**: The robot adjusts its behavior based on VS Code window focus state
+  - **Short breaks (30 seconds)**: Robot looks around when you briefly look away
+  - **Medium breaks (2 minutes)**: Robot falls asleep after moderate inactivity
+  - **Long breaks (3+ minutes)**: Robot walks away and then sleeps
+  - **Return behaviors**: Context-aware greetings when you return
+    - Quick peek if you were away less than 30 seconds
+    - Wave if you interrupted the robot during lookaround or walk
+    - Stretch and wave with personalized greeting based on time away when waking from sleep
 
 ## Commands
 
