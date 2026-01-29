@@ -46,6 +46,109 @@ export function activate(context: vscode.ExtensionContext) {
 		petViewProvider.setMood(payload);
 	});
 
+	// Window focus monitoring for behavior adjustments
+	let windowFocusTimer: NodeJS.Timeout | undefined;
+	let lastFocusLostTime: number | undefined;
+	const UNFOCUSED_SLEEP_DELAY_MS = 120000; // 2 minutes
+	const UNFOCUSED_WALK_AWAY_DELAY_MS = 180000; // 3 minutes
+
+	const handleWindowStateChange = () => {
+		const isFocused = vscode.window.state.focused;
+		
+		if (!isFocused) {
+			// Window lost focus
+			if (!lastFocusLostTime) {
+				lastFocusLostTime = Date.now();
+			}
+			
+			// Clear any existing timer
+			if (windowFocusTimer) {
+				clearTimeout(windowFocusTimer);
+			}
+			
+			// Set timer to trigger sleep behavior after delay
+			windowFocusTimer = setTimeout(() => {
+				if (petViewProvider.isReady() && !vscode.window.state.focused) {
+					const elapsedTime = Date.now() - (lastFocusLostTime ?? Date.now());
+					
+					if (elapsedTime >= UNFOCUSED_WALK_AWAY_DELAY_MS) {
+						// Walk away behavior - robot moves around and sleeps
+						petViewProvider.setMood({ 
+							mood: 'walk', 
+							message: 'Window inactive - walking away',
+							durationSeconds: 3
+						});
+						
+						// Then sleep
+						setTimeout(() => {
+							if (!vscode.window.state.focused && petViewProvider.isReady()) {
+								petViewProvider.setMood({ 
+									mood: 'sleep', 
+									message: 'Window inactive - sleeping'
+								});
+							}
+						}, 3000);
+					} else if (elapsedTime >= UNFOCUSED_SLEEP_DELAY_MS) {
+						// Just sleep
+						petViewProvider.setMood({ 
+							mood: 'sleep', 
+							message: 'Window inactive - sleeping'
+						});
+					}
+				}
+			}, UNFOCUSED_SLEEP_DELAY_MS);
+			
+			getOutputChannel().appendLine(`[WindowMonitor] Window lost focus at ${new Date().toISOString()}`);
+		} else {
+			// Window gained focus
+			if (lastFocusLostTime) {
+				const inactiveTimeMs = Date.now() - lastFocusLostTime;
+				const inactiveTimeMin = Math.floor(inactiveTimeMs / 60000);
+				getOutputChannel().appendLine(`[WindowMonitor] Window regained focus after ${inactiveTimeMin} minutes inactive`);
+				
+				// Wake up the robot if it was sleeping
+				if (petViewProvider.isReady() && petViewProvider.getCurrentMood() === 'sleep') {
+					petViewProvider.setMood({ 
+						mood: 'stretch', 
+						message: 'Waking up!',
+						durationSeconds: 3
+					});
+					
+					// Then wave
+					setTimeout(() => {
+						if (petViewProvider.isReady()) {
+							petViewProvider.setMood({ 
+								mood: 'wave', 
+								message: 'Welcome back!',
+								durationSeconds: 2
+							});
+						}
+					}, 3000);
+				}
+				
+				lastFocusLostTime = undefined;
+			}
+			
+			// Clear any pending timers
+			if (windowFocusTimer) {
+				clearTimeout(windowFocusTimer);
+				windowFocusTimer = undefined;
+			}
+			
+			getOutputChannel().appendLine(`[WindowMonitor] Window gained focus at ${new Date().toISOString()}`);
+		}
+	};
+
+	// Monitor window state changes
+	context.subscriptions.push(
+		vscode.window.onDidChangeWindowState((state) => {
+			handleWindowStateChange();
+		})
+	);
+
+	// Check initial state
+	handleWindowStateChange();
+
 	context.subscriptions.push(moodService);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(PetViewProvider.viewType, petViewProvider, {
