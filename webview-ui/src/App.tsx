@@ -221,7 +221,7 @@ export default function App() {
 		const forwardDir = new Vector3(0, 0, 1);
 		const toCameraDir = new Vector3();
 		const yAxis = new Vector3(0, 1, 0);
-		const robotSpeed = 5;
+    let currentSpeed = 0;
 		const moveBounds = { x: 10, zNear: 2, zRange: 6 };
 		const peekTargets = [
 			new Vector3(-7, -0.4, 8.5),
@@ -370,41 +370,74 @@ export default function App() {
 				}
 			} else if (aiState === 'MOVING') {
 				const direction = new Vector3().subVectors(moveTarget, robot.position);
-				const dist = direction.length();
+        const dist = direction.length();
 
-				if (dist < 0.2) {
-					robot.position.copy(moveTarget);
-					if (robot.position.z > 8) {
-						aiState = 'PERFORMING';
-						const isSidePeek = Math.abs(robot.position.x) > moveBounds.x * 0.2;
-						setRobotAction(isSidePeek ? 'peek' : 'wave');
-						aiTimer = isSidePeek ? 3.6 : 3;
-						
-						const targetRot = 0;
-						let rotDiff = targetRot - robot.rotation.y;
-						while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-						while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-						robot.rotation.y = targetRot;
-					} else {
-						aiState = 'IDLE';
-						setRobotAction('idle');
-						aiTimer = 1;
-						
-					}
-				} else {
-					direction.normalize();
-					toCameraDir.subVectors(camera.position, robot.position).setY(0);
-					const towardCamera = toCameraDir.lengthSq() > 0.0001
-						? direction.dot(toCameraDir.normalize())
-						: 0;
-					const speedScale = towardCamera > 0.2 ? 0.75 : towardCamera < -0.2 ? 1.15 : 1;
-					robot.position.addScaledVector(direction, robotSpeed * speedScale * delta);
-					const targetRot = Math.atan2(direction.x, direction.z);
-					let rotDiff = targetRot - robot.rotation.y;
-					while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-					while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-					robot.rotation.y += rotDiff * 0.1;
-				}
+        // CHANGE 2: Dynamic Speed & Action Selection Logic
+        if (dist < 0.2) {
+          robot.position.copy(moveTarget);
+          currentSpeed = 0; // Reset speed on stop
+
+          if (robot.position.z > 8) {
+            aiState = 'PERFORMING';
+            const isSidePeek = Math.abs(robot.position.x) > moveBounds.x * 0.2;
+            setRobotAction(isSidePeek ? 'peek' : 'wave');
+            aiTimer = isSidePeek ? 3.6 : 3;
+            
+            const targetRot = 0;
+            let rotDiff = targetRot - robot.rotation.y;
+            while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+            while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+            robot.rotation.y = targetRot;
+          } else {
+            aiState = 'IDLE';
+            setRobotAction('idle');
+            aiTimer = 1;
+          }
+        } else {
+          direction.normalize();
+          
+          // 1. Calculate Target Speed based on distance
+          // If far (>3 units), target fast speed (8), else slow speed (3.5)
+          let targetSpeed = dist > 3 ? 8 : 3.5;
+
+          // 2. Apply Camera "Shyness" (Slow down if moving toward camera)
+          toCameraDir.subVectors(camera.position, robot.position).setY(0);
+          const towardCamera = toCameraDir.lengthSq() > 0.0001
+            ? direction.dot(toCameraDir.normalize())
+            : 0;
+            
+          // If moving towards camera, cap the max speed
+          if (towardCamera > 0.2) targetSpeed = Math.min(targetSpeed, 3.5); 
+          const speedScale = towardCamera > 0.2 ? 0.75 : towardCamera < -0.2 ? 1.15 : 1;
+          targetSpeed *= speedScale;
+
+          // 3. Smooth Acceleration/Deceleration (Lerp currentSpeed)
+          // factor of 4 * delta gives a nice weight (adjust for inertia)
+          currentSpeed = MathUtils.lerp(currentSpeed, targetSpeed, delta * 4);
+
+          // 4. Move Robot
+          robot.position.addScaledVector(direction, currentSpeed * delta);
+
+          // 5. Pick Correct Action (Run vs Walk)
+          // Threshold is 5.5. We check isRobotAction('run') to ensure it exists before switching.
+          const runThreshold = 5.5;
+          const correctAction = (currentSpeed > runThreshold && isRobotAction('running')) ? 'running' : 'walk';
+          
+          // Only switch if we are currently in a locomotion state (prevents overriding 'wave' accidentally if called elsewhere)
+          if (currentAction === 'walk' || currentAction === 'running') {
+             setRobotAction(correctAction);
+          }
+
+          // 6. Rotation Logic (Existing)
+          const targetRot = Math.atan2(direction.x, direction.z);
+          let rotDiff = targetRot - robot.rotation.y;
+          while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+          while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+          
+          // Rotate faster if we are moving faster
+          const turnSpeed = Math.max(0.1, currentSpeed * 0.03); 
+          robot.rotation.y += rotDiff * turnSpeed;
+        }
 			} else if (aiState === 'PERFORMING') {
 				if (aiTimer <= 0) {
 					aiState = 'IDLE';
