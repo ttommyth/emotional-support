@@ -127,7 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
 				if (petViewProvider.isReady()) {
 					petViewProvider.setAutopilot(true);
 					petViewProvider.setMood({ mood: 'idle', message: 'Focus regained.' });
-					if (Math.random() < 0.7) {
+					if (Math.random() < 0.3) {
 						petViewProvider.forceMove('front');
 					}
 				}
