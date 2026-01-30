@@ -1,7 +1,7 @@
 ---
 description: Maintains MCP server definitions and bridge integration
 mode: subagent
-model: openai/gpt-5-mini
+model: github-copilot/gpt-5-mini
 temperature: 0.2
 tools:
   write: true

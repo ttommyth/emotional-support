@@ -1,7 +1,7 @@
 ---
 description: Builds and refines the webview UI (React/Vite/Three.js)
 mode: subagent
-model: openai/gpt-5-mini
+model: github-copilot/gpt-5-mini
 temperature: 0.35
 tools:
   write: true

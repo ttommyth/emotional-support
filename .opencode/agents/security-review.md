@@ -1,7 +1,7 @@
 ---
 description: Performs read-only security review of extension, hooks, and MCP
 mode: subagent
-model: openai/gpt-5-mini
+model: github-copilot/gpt-5-mini
 temperature: 0.1
 tools:
   write: false

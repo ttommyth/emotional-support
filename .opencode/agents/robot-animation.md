@@ -1,7 +1,7 @@
 ---
 description: Generates robot animations and props for the Three.js companion
 mode: subagent
-model: openai/gpt-5-mini
+model: github-copilot/gpt-5-mini
 temperature: 0.4
 tools:
   write: true

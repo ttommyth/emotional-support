@@ -1,7 +1,7 @@
 ---
 description: Works on Cursor hook integration and sample scripts
 mode: subagent
-model: openai/gpt-5-mini
+model: github-copilot/gpt-5-mini
 temperature: 0.25
 tools:
   write: true
