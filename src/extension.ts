@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { McpBridge, RobotControlState } from './mcp-bridge';
 import { CursorHookBridge } from './cursor-hook-bridge';
-import { PetAction, PetMoodService } from './pet-mood-service';
+import { PET_ACTIONS, PetAction, PetMoodService } from './pet-mood-service';
 
 let outputChannel: vscode.OutputChannel | undefined;
 
@@ -15,36 +15,6 @@ export function getOutputChannel(): vscode.OutputChannel {
 	}
 	return outputChannel;
 }
-
-const IDLE_ACTIONS: PetAction[] = [
-	'idle',
-	'stretch',
-	'dance',
-	'lookaround',
-	'shrug',
-	'wave',
-	'sleep',
-	'sit',
-	'laydown',
-	'laydownflat',
-	'rest',
-	'ballet',
-	'walk',
-	'running'
-];
-const CODING_ACTIONS: PetAction[] = [
-	'thinking',
-	'coding',
-	'debugging',
-	'reviewing',
-	'refactoring',
-	'testing',
-	'reading',
-	'success',
-	'error'
-];
-const SPECIAL_ACTIONS: PetAction[] = ['peek', 'knocked'];
-const PET_ACTIONS: PetAction[] = [...IDLE_ACTIONS, ...CODING_ACTIONS, ...SPECIAL_ACTIONS];
 
 const isPetAction = (value: string): value is PetAction => PET_ACTIONS.includes(value as PetAction);
 
@@ -68,7 +38,17 @@ export function activate(context: vscode.ExtensionContext) {
 	const UNFOCUSED_BACKOFF_BASE_MS = 15000; // 15 seconds
 	const UNFOCUSED_BACKOFF_MULTIPLIER = 1.9;
 	const UNFOCUSED_BACKOFF_STEPS = 3;
-const UNFOCUSED_ACTIONS: PetAction[] = ['lookaround', 'stretch', 'shrug', 'peek', 'walk', 'sit', 'rest', 'laydownflat', 'ballet'];
+	const UNFOCUSED_ACTIONS: PetAction[] = [
+		'lookaround',
+		'stretch',
+		'shrug',
+		'peek',
+		'walk',
+		'sit',
+		'rest',
+		'laydownflat',
+		'ballet'
+	];
 
 	const clearAllTimers = () => {
 		if (windowFocusTimer) {
@@ -478,6 +458,14 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.onDidReceiveMessage((message) => {
 			switch (message?.command) {
+				case 'READY': {
+					webviewView.webview.postMessage({
+						command: 'INIT',
+						actions: PET_ACTIONS,
+						autopilotEnabled: this.petViewProvider.getState().autopilotEnabled
+					});
+					break;
+				}
 				case 'FORCE_ACTION': {
 					if (typeof message?.action !== 'string' || !isPetAction(message.action)) {
 						return;
@@ -501,6 +489,10 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						return;
 					}
 					this.petViewProvider.setAutopilot(message.enabled);
+					webviewView.webview.postMessage({
+						command: 'AUTOPILOT_UPDATE',
+						enabled: message.enabled
+					});
 					break;
 				}
 				case 'FORCE_MOVE': {
@@ -521,164 +513,40 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
-		const nonce = getNonce();
-		const csp = [
-			"default-src 'none'",
-			`style-src ${webview.cspSource} 'unsafe-inline'`,
-			`script-src 'nonce-${nonce}'`
-		].join('; ');
-		const renderButtons = (actions: PetAction[]) =>
-			actions
-				.map((action) => {
-					const label = `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
-					return `<button class="btn" data-action="${action}">${label}</button>`;
-				})
-				.join('');
-		const buttons = `
-			<h4>Idle filler</h4>
-			<div class="btn-group">${renderButtons(IDLE_ACTIONS)}</div>
-			<h4>Coding related</h4>
-			<div class="btn-group">${renderButtons(CODING_ACTIONS)}</div>
-			<h4>Special</h4>
-			<div class="btn-group">${renderButtons(SPECIAL_ACTIONS)}</div>
-		`;
-
-		return `<!DOCTYPE html>
+		const distPath = vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist');
+		const indexPath = vscode.Uri.joinPath(distPath, 'control.html');
+		try {
+			const rawHtml = fs.readFileSync(indexPath.fsPath, 'utf8');
+			const baseUri = webview.asWebviewUri(distPath);
+			const csp = [
+				"default-src 'none'",
+				`img-src ${webview.cspSource} data:`,
+				`style-src ${webview.cspSource} 'unsafe-inline'`,
+				`script-src ${webview.cspSource}`,
+				`font-src ${webview.cspSource}`
+			].join('; ');
+			return rawHtml
+				.replace('<head>', `<head>\n\t<meta http-equiv="Content-Security-Policy" content="${csp}">`)
+				.replace(/(src|href)=\"\.\//g, `$1="${baseUri}/`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Unknown error';
+			return `<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta http-equiv="Content-Security-Policy" content="${csp}">
 	<title>Robot Control Panel</title>
 	<style>
-		:root {
-			color-scheme: light dark;
-		}
-		body {
-			font-family: var(--vscode-font-family);
-			color: var(--vscode-foreground);
-			margin: 0;
-			padding: 16px;
-			background: var(--vscode-sideBar-background);
-		}
-		h3 {
-			margin: 0 0 8px;
-			font-size: 14px;
-		}
-		p {
-			margin: 0 0 12px;
-			font-size: 12px;
-			color: var(--vscode-descriptionForeground);
-		}
-		h4 {
-			margin: 8px 0;
-			font-size: 12px;
-			color: var(--vscode-descriptionForeground);
-		}
-		.grid {
-			display: flex;
-			flex-direction: column;
-			gap: 10px;
-		}
-		.btn-group {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-			gap: 8px;
-		}
-		.section {
-			margin-bottom: 12px;
-		}
-		.btn {
-			border: 1px solid var(--vscode-button-border, transparent);
-			border-radius: 8px;
-			padding: 8px 10px;
-			background: var(--vscode-button-secondaryBackground);
-			color: var(--vscode-button-secondaryForeground);
-			cursor: pointer;
-			font-size: 12px;
-			text-align: center;
-		}
-		.btn:hover {
-			background: var(--vscode-button-secondaryHoverBackground);
-		}
-		.btn-primary {
-			background: var(--vscode-button-background);
-			color: var(--vscode-button-foreground);
-		}
-		.btn-primary:hover {
-			background: var(--vscode-button-hoverBackground);
-		}
-		.hint {
-			margin-top: 12px;
-			font-size: 11px;
-		}
+		body { font-family: sans-serif; padding: 16px; }
+		code { background: #f2f2f2; padding: 2px 6px; border-radius: 6px; }
 	</style>
 </head>
 <body>
-	<h3>Robot Control Panel</h3>
-	<p>Force the robot to perform an action.</p>
-	<div class="section">
-		<button id="autopilot-toggle" class="btn btn-primary" type="button">Autopilot: On</button>
-	</div>
-	<div class="section">
-		<h4>Camera peeks</h4>
-		<div class="btn-group">
-			<button class="btn" data-move="left" type="button">Peek Left</button>
-			<button class="btn" data-move="front" type="button">Peek Front</button>
-			<button class="btn" data-move="right" type="button">Peek Right</button>
-		</div>
-	</div>
-	<div class="grid">${buttons}</div>
-	<p class="hint">Open the Emotional Support view to see the action.</p>
-	<script nonce="${nonce}">
-		const vscode = typeof acquireVsCodeApi === 'function'
-			? acquireVsCodeApi()
-			: { postMessage: () => undefined };
-		let autopilotEnabled = true;
-		const autopilotButton = document.getElementById('autopilot-toggle');
-		const updateAutopilotButton = () => {
-			if (!autopilotButton) {
-				return;
-			}
-			autopilotButton.textContent = 'Autopilot: ' + (autopilotEnabled ? 'On' : 'Off');
-		};
-		if (autopilotButton) {
-			autopilotButton.addEventListener('click', () => {
-				autopilotEnabled = !autopilotEnabled;
-				updateAutopilotButton();
-				vscode.postMessage({ command: 'SET_AUTOPILOT', enabled: autopilotEnabled });
-			});
-		}
-		updateAutopilotButton();
-		document.querySelectorAll('[data-action]').forEach((button) => {
-			button.addEventListener('click', () => {
-				const action = button.getAttribute('data-action');
-				if (!action) {
-					return;
-				}
-				vscode.postMessage({ command: 'FORCE_ACTION', action });
-			});
-		});
-		document.querySelectorAll('[data-move]').forEach((button) => {
-			button.addEventListener('click', () => {
-				const target = button.getAttribute('data-move');
-				if (!target) {
-					return;
-				}
-				vscode.postMessage({ command: 'FORCE_MOVE', target });
-			});
-		});
-	</script>
+	<h3>Control panel UI not built yet</h3>
+	<p>Run <code>npm run build:webview</code> in the extension workspace.</p>
+	<p>${message}</p>
 </body>
 </html>`;
+		}
 	}
-}
-
-function getNonce() {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i += 1) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
 }

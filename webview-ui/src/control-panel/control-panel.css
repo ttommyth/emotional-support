@@ -1,0 +1,100 @@
+.control-root {
+    min-height: 100vh;
+    padding: 12px;
+    background: var(--vscode-sideBar-background);
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+}
+
+.control-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.control-header .title {
+    display: flex;
+    flex-direction: column;
+}
+
+.control-header h1 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.control-header .subtle {
+    margin: 0;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.status-chip {
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    background: transparent;
+    border: 1px solid transparent;
+}
+
+.status-chip[data-state='ready'] {
+    color: var(--vscode-terminal-ansiGreen, #6ccf9f);
+    border-color: rgba(125, 213, 181, 0.12);
+}
+
+.panel {
+    background: var(--vscode-editorGroupHeader-tabsBackground, transparent);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(128,128,128,0.06);
+}
+
+.panel h2 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.panel-row { display: flex; gap: 8px; align-items: center; }
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+}
+
+.btn {
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.btn:hover { filter: brightness(1.05); }
+
+.btn.primary {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.hint { margin-top: 8px; font-size: 11px; color: var(--vscode-descriptionForeground); }
+
+@media (max-width: 640px) {
+    .control-root { padding: 10px; }
+    .grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+}
