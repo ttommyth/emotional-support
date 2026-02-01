@@ -40,7 +40,8 @@ jobs:
       - name: Determine version bump from commits
         id: bump
         run: |
-          npm_config_yes=true npx conventional-recommended-bump -p angular > .bump_type
+          npm_config_yes=true npx -p conventional-recommended-bump -p conventional-changelog-angular \
+            conventional-recommended-bump -p angular > .bump_type
           BUMP_TYPE=$(cat .bump_type)
           if [ -z "$BUMP_TYPE" ]; then
             echo "Unable to determine bump type."
