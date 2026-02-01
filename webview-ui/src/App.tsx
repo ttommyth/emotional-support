@@ -591,6 +591,11 @@ export default function App() {
 			isUnfocused = document.hidden || !document.hasFocus();
 			if (!isUnfocused) {
 				unfocusedIdleTimer = 0;
+				if (currentAction === 'peek' && !mcpOverrideActive && isAutoMode) {
+					aiState = 'IDLE';
+					aiTimer = 0;
+					setRobotAction('idle');
+				}
 			}
 		};
 		window.addEventListener('blur', updateFocusState);
@@ -644,8 +649,13 @@ export default function App() {
 				if (!target) {
 					return;
 				}
-				mcpOverrideActive = true;
-				mcpRequestedAction = 'walk';
+				mcpOverrideActive = false;
+				mcpRequestedAction = undefined;
+				mcpDurationTimer = 0;
+				if (mcpTimeoutId) {
+					window.clearTimeout(mcpTimeoutId);
+					mcpTimeoutId = 0;
+				}
 				isAutoMode = true;
 				aiState = 'MOVING';
 				aiTimer = 4;
