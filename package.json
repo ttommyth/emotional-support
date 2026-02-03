@@ -7,7 +7,7 @@
     "url": "https://github.com/ttommyth/emotional-support.git"
   },
   "publisher": "problemsofa",
-  "version": "0.0.2",
+  "version": "0.0.3-rc.0",
   "engines": {
     "vscode": "^1.105.0"
   },
@@ -50,8 +50,7 @@
       {
         "command": "emotional-support.setPetMood",
         "title": "Emotional Support: Cycle Emotional Support Mood (Demo)"
-      }
-      ,
+      },
       {
         "command": "emotional-support.showOutput",
         "title": "Emotional Support: Show Output"
@@ -59,8 +58,7 @@
       {
         "command": "emotional-support.clearOutput",
         "title": "Emotional Support: Clear Output"
-      }
-      ,
+      },
       {
         "command": "emotional-support.installUserHook",
         "title": "Emotional Support: Install user-level Cursor hook"
