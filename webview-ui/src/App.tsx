@@ -608,18 +608,23 @@ export default function App() {
 		window.addEventListener('focus', updateFocusState);
 		document.addEventListener('visibilitychange', updateFocusState);
 
+		const parseHexColor = (value: string): number | undefined => {
+			const hex = parseInt(value.replace('#', ''), 16);
+			return isNaN(hex) ? undefined : hex;
+		};
+
 		const onMessage = (event: MessageEvent) => {
 			const message = event.data;
 			if (message?.command === 'SET_CONFIG') {
 				if (typeof message.accentColor === 'string') {
-					const hex = parseInt(message.accentColor.replace('#', ''), 16);
-					if (!isNaN(hex)) {
+					const hex = parseHexColor(message.accentColor);
+					if (hex !== undefined) {
 						matOrange.color.setHex(hex);
 					}
 				}
 				if (typeof message.defaultEyeColor === 'string') {
-					const hex = parseInt(message.defaultEyeColor.replace('#', ''), 16);
-					if (!isNaN(hex)) {
+					const hex = parseHexColor(message.defaultEyeColor);
+					if (hex !== undefined) {
 						defaultEyeColorHex = hex;
 						setEyeColor(currentAction);
 					}
@@ -632,7 +637,7 @@ export default function App() {
 					}
 				}
 				if (typeof message.unfocusedSleepDelay === 'number') {
-					unfocusedSleepDelay = message.unfocusedSleepDelay;
+					unfocusedSleepDelay = Math.max(5, Math.min(300, message.unfocusedSleepDelay));
 				}
 				return;
 			}
