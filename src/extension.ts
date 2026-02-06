@@ -85,13 +85,10 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 
 					const disabledActions = petViewProvider.getConfig().disabledActions;
-					const nextActionOptions = UNFOCUSED_ACTIONS.filter(
-						(action) => action !== lastUnfocusedAction && !disabledActions.includes(action)
+					const enabledActions = UNFOCUSED_ACTIONS.filter(
+						(action) => !disabledActions.includes(action)
 					);
-					const pool = nextActionOptions.length > 0
-						? nextActionOptions
-						: UNFOCUSED_ACTIONS.filter((action) => !disabledActions.includes(action));
-					if (pool.length === 0) {
+					if (enabledActions.length === 0) {
 						// All unfocused actions disabled — sleep immediately
 						petViewProvider.setMood({
 							mood: 'sleep',
@@ -99,6 +96,10 @@ export function activate(context: vscode.ExtensionContext) {
 						});
 						return;
 					}
+					const nextActionOptions = enabledActions.filter(
+						(action) => action !== lastUnfocusedAction
+					);
+					const pool = nextActionOptions.length > 0 ? nextActionOptions : enabledActions;
 					const nextAction = pool[Math.floor(Math.random() * pool.length)];
 					lastUnfocusedAction = nextAction;
 					const durationSeconds = nextAction === 'walk' ? 3 : nextAction === 'peek' ? 1.5 : 2.2;
