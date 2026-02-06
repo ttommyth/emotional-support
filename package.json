@@ -79,16 +79,65 @@
           "pattern": "^#[0-9a-fA-F]{6}$",
           "description": "Accent color for the robot (chest plate, ears, antenna). Use a hex color value (e.g. #ff9f43)."
         },
+        "emotional-support.bodyColor": {
+          "type": "string",
+          "default": "#ffffff",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Body color for the robot (torso, head, hands, feet). Use a hex color value (e.g. #ffffff)."
+        },
+        "emotional-support.visorColor": {
+          "type": "string",
+          "default": "#343a40",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Visor color on the robot's face. Use a hex color value (e.g. #343a40)."
+        },
+        "emotional-support.limbColor": {
+          "type": "string",
+          "default": "#aabbaa",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Limb color for the robot's arms. Use a hex color value (e.g. #aabbaa)."
+        },
         "emotional-support.defaultEyeColor": {
           "type": "string",
           "default": "#00d2d3",
           "pattern": "^#[0-9a-fA-F]{6}$",
           "description": "Default eye color for the robot in idle/coding state. Use a hex color value (e.g. #00d2d3)."
         },
+        "emotional-support.successEyeColor": {
+          "type": "string",
+          "default": "#1dd1a1",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Eye color when the robot is in a success state. Use a hex color value (e.g. #1dd1a1)."
+        },
+        "emotional-support.errorEyeColor": {
+          "type": "string",
+          "default": "#ff5252",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Eye color when the robot is in an error state. Use a hex color value (e.g. #ff5252)."
+        },
         "emotional-support.idleAnimations": {
           "type": "boolean",
           "default": true,
           "description": "Enable or disable autopilot idle animations (walking, dancing, peeking)."
+        },
+        "emotional-support.reactToClicks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the robot reacts when you click on the panel (wave, look, wake up)."
+        },
+        "emotional-support.animationSpeed": {
+          "type": "number",
+          "default": 1.0,
+          "minimum": 0.2,
+          "maximum": 3.0,
+          "description": "Speed multiplier for robot animations. Values above 1 make the robot more energetic, below 1 more relaxed."
+        },
+        "emotional-support.movementSpeed": {
+          "type": "number",
+          "default": 1.0,
+          "minimum": 0.2,
+          "maximum": 3.0,
+          "description": "Speed multiplier for robot walking and running movement."
         },
         "emotional-support.unfocusedSleepDelay": {
           "type": "number",
@@ -96,6 +145,32 @@
           "minimum": 5,
           "maximum": 300,
           "description": "Seconds of inactivity before the robot falls asleep when the window is unfocused."
+        },
+        "emotional-support.disabledActions": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "enum": [
+              "dance",
+              "ballet",
+              "wave",
+              "stretch",
+              "lookaround",
+              "shrug",
+              "peek",
+              "sit",
+              "rest",
+              "laydown",
+              "laydownflat",
+              "sleep",
+              "walk",
+              "running",
+              "knocked"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "List of actions to exclude from autopilot and unfocused behaviors. Core actions (idle, coding, etc.) cannot be disabled."
         }
       }
     }

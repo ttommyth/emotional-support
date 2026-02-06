@@ -84,8 +84,21 @@ export function activate(context: vscode.ExtensionContext) {
 						return;
 					}
 
-					const nextActionOptions = UNFOCUSED_ACTIONS.filter((action) => action !== lastUnfocusedAction);
-					const pool = nextActionOptions.length > 0 ? nextActionOptions : UNFOCUSED_ACTIONS;
+					const disabledActions = petViewProvider.getConfig().disabledActions;
+					const nextActionOptions = UNFOCUSED_ACTIONS.filter(
+						(action) => action !== lastUnfocusedAction && !disabledActions.includes(action)
+					);
+					const pool = nextActionOptions.length > 0
+						? nextActionOptions
+						: UNFOCUSED_ACTIONS.filter((action) => !disabledActions.includes(action));
+					if (pool.length === 0) {
+						// All unfocused actions disabled — sleep immediately
+						petViewProvider.setMood({
+							mood: 'sleep',
+							message: 'Window inactive - sleeping'
+						});
+						return;
+					}
 					const nextAction = pool[Math.floor(Math.random() * pool.length)];
 					lastUnfocusedAction = nextAction;
 					const durationSeconds = nextAction === 'walk' ? 3 : nextAction === 'peek' ? 1.5 : 2.2;
@@ -351,9 +364,18 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		const config = vscode.workspace.getConfiguration('emotional-support');
 		return {
 			accentColor: config.get<string>('accentColor', '#ff9f43'),
+			bodyColor: config.get<string>('bodyColor', '#ffffff'),
+			visorColor: config.get<string>('visorColor', '#343a40'),
+			limbColor: config.get<string>('limbColor', '#aabbaa'),
 			defaultEyeColor: config.get<string>('defaultEyeColor', '#00d2d3'),
+			successEyeColor: config.get<string>('successEyeColor', '#1dd1a1'),
+			errorEyeColor: config.get<string>('errorEyeColor', '#ff5252'),
 			idleAnimations: config.get<boolean>('idleAnimations', true),
-			unfocusedSleepDelay: config.get<number>('unfocusedSleepDelay', 20)
+			reactToClicks: config.get<boolean>('reactToClicks', true),
+			animationSpeed: config.get<number>('animationSpeed', 1.0),
+			movementSpeed: config.get<number>('movementSpeed', 1.0),
+			unfocusedSleepDelay: config.get<number>('unfocusedSleepDelay', 20),
+			disabledActions: config.get<string[]>('disabledActions', [])
 		};
 	}
 
