@@ -98,6 +98,14 @@ export default function App() {
 		const matMetal = new MeshLambertMaterial({ color: colors.metal });
 		const matEye = new MeshBasicMaterial({ color: colors.eyeCyan });
 
+		let defaultEyeColorHex = colors.eyeCyan;
+		let successEyeColorHex = colors.eyeGreen;
+		let errorEyeColorHex = colors.eyeRed;
+		let animationSpeedMultiplier = 1.0;
+		let movementSpeedMultiplier = 1.0;
+		let reactToClicks = true;
+		let disabledActions: Set<string> = new Set();
+
 		const robot = new Group();
 		robot.position.set(0, -0.6, 2.5);
 		scene.add(robot);
@@ -215,7 +223,7 @@ export default function App() {
 		let mcpTimeoutId = 0;
 		let isUnfocused = document.hidden || !document.hasFocus();
 		let unfocusedIdleTimer = 0;
-		const unfocusedSleepDelay = 20;
+		let unfocusedSleepDelay = 20;
 		
 		const moveTarget = new Vector3();
 		const forwardDir = new Vector3(0, 0, 1);
@@ -313,7 +321,15 @@ export default function App() {
 
 		function setEyeColor(action: RobotActionName) {
 			const desired = robotActions[action].eyeColor;
-			matEye.color.setHex(getEyeColor(colors, desired));
+			if (!desired || desired === 'cyan') {
+				matEye.color.setHex(defaultEyeColorHex);
+			} else if (desired === 'green') {
+				matEye.color.setHex(successEyeColorHex);
+			} else if (desired === 'red') {
+				matEye.color.setHex(errorEyeColorHex);
+			} else {
+				matEye.color.setHex(getEyeColor(colors, desired));
+			}
 		}
 
 		function updateAI(delta: number) {
@@ -347,25 +363,35 @@ export default function App() {
 						performChance = 0.18;
 					}
 					if (r < moveChance) {
-						aiState = 'MOVING';
-						moveTarget.set(
-							(Math.random() - 0.5) * moveBounds.x,
-							0,
-							(Math.random() - 0.5) * moveBounds.zRange + moveBounds.zNear
-						);
-						setRobotAction('walk');
+						if (disabledActions.has('walk')) {
+							aiState = 'IDLE';
+							aiTimer = 1;
+						} else {
+							aiState = 'MOVING';
+							moveTarget.set(
+								(Math.random() - 0.5) * moveBounds.x,
+								0,
+								(Math.random() - 0.5) * moveBounds.zRange + moveBounds.zNear
+							);
+							setRobotAction('walk');
+						}
 					} else if (r < moveChance + performChance) {
-						const acts = getActionsByTag('idleFiller');
+						const acts = getActionsByTag('idleFiller').filter((a) => !disabledActions.has(a));
 						if (acts.length > 0) {
 							setRobotAction(acts[Math.floor(Math.random() * acts.length)]);
 						}
 						aiState = 'PERFORMING';
 						aiTimer = 3 + Math.random() * 4;
 					} else {
-						aiState = 'MOVING';
-						const peekTarget = peekTargets[Math.floor(Math.random() * peekTargets.length)];
-						moveTarget.copy(peekTarget);
-						setRobotAction('walk');
+						if (disabledActions.has('peek') || disabledActions.has('walk')) {
+							aiState = 'IDLE';
+							aiTimer = 1;
+						} else {
+							aiState = 'MOVING';
+							const peekTarget = peekTargets[Math.floor(Math.random() * peekTargets.length)];
+							moveTarget.copy(peekTarget);
+							setRobotAction('walk');
+						}
 					}
 				}
 			} else if (aiState === 'MOVING') {
@@ -398,7 +424,7 @@ export default function App() {
           
           // 1. Calculate Target Speed based on distance
           // If far (>3 units), target fast speed (8), else slow speed (3.5)
-          let targetSpeed = dist > 3 ? 8 : 3.5;
+          let targetSpeed = (dist > 3 ? 8 : 3.5) * movementSpeedMultiplier;
 
           // 2. Apply Camera "Shyness" (Slow down if moving toward camera)
           toCameraDir.subVectors(camera.position, robot.position).setY(0);
@@ -477,6 +503,9 @@ export default function App() {
 		};
 
 		const onWindowClick = (event: MouseEvent) => {
+			if (!reactToClicks) {
+				return;
+			}
 			createRipple(event.clientX, event.clientY);
 			const rect = containerEl.getBoundingClientRect();
 			const normalizedX = MathUtils.clamp(((event.clientX - rect.left) / rect.width - 0.5) * 2, -1, 1);
@@ -602,8 +631,82 @@ export default function App() {
 		window.addEventListener('focus', updateFocusState);
 		document.addEventListener('visibilitychange', updateFocusState);
 
+		const parseHexColor = (value: string): number | undefined => {
+			const hex = parseInt(value.replace('#', ''), 16);
+			return isNaN(hex) ? undefined : hex;
+		};
+
 		const onMessage = (event: MessageEvent) => {
 			const message = event.data;
+			if (message?.command === 'SET_CONFIG') {
+				if (typeof message.accentColor === 'string') {
+					const hex = parseHexColor(message.accentColor);
+					if (hex !== undefined) {
+						matOrange.color.setHex(hex);
+					}
+				}
+				if (typeof message.bodyColor === 'string') {
+					const hex = parseHexColor(message.bodyColor);
+					if (hex !== undefined) {
+						matWhite.color.setHex(hex);
+					}
+				}
+				if (typeof message.visorColor === 'string') {
+					const hex = parseHexColor(message.visorColor);
+					if (hex !== undefined) {
+						matDark.color.setHex(hex);
+					}
+				}
+				if (typeof message.limbColor === 'string') {
+					const hex = parseHexColor(message.limbColor);
+					if (hex !== undefined) {
+						matMetal.color.setHex(hex);
+					}
+				}
+				if (typeof message.defaultEyeColor === 'string') {
+					const hex = parseHexColor(message.defaultEyeColor);
+					if (hex !== undefined) {
+						defaultEyeColorHex = hex;
+					}
+				}
+				if (typeof message.successEyeColor === 'string') {
+					const hex = parseHexColor(message.successEyeColor);
+					if (hex !== undefined) {
+						successEyeColorHex = hex;
+					}
+				}
+				if (typeof message.errorEyeColor === 'string') {
+					const hex = parseHexColor(message.errorEyeColor);
+					if (hex !== undefined) {
+						errorEyeColorHex = hex;
+					}
+				}
+				// Re-apply current eye color after all color changes
+				setEyeColor(currentAction);
+				if (typeof message.idleAnimations === 'boolean') {
+					isAutoMode = message.idleAnimations;
+					if (isAutoMode) {
+						aiState = 'IDLE';
+						aiTimer = 0;
+					}
+				}
+				if (typeof message.reactToClicks === 'boolean') {
+					reactToClicks = message.reactToClicks;
+				}
+				if (typeof message.animationSpeed === 'number') {
+					animationSpeedMultiplier = Math.max(0.2, Math.min(3.0, message.animationSpeed));
+				}
+				if (typeof message.movementSpeed === 'number') {
+					movementSpeedMultiplier = Math.max(0.2, Math.min(3.0, message.movementSpeed));
+				}
+				if (typeof message.unfocusedSleepDelay === 'number') {
+					unfocusedSleepDelay = Math.max(5, Math.min(300, message.unfocusedSleepDelay));
+				}
+				if (Array.isArray(message.disabledActions)) {
+					disabledActions = new Set(message.disabledActions.filter((a: unknown) => typeof a === 'string'));
+				}
+				return;
+			}
 			if (message?.command === 'SET_MOOD' && typeof message?.mood === 'string' && isRobotAction(message.mood)) {
 				setRobotAction(message.mood);
 				mcpRequestedAction = message.mood;
@@ -669,7 +772,8 @@ export default function App() {
 
 		function animate() {
 			animationId = requestAnimationFrame(animate);
-			const delta = clock.getDelta();
+			const rawDelta = clock.getDelta();
+			const delta = rawDelta * animationSpeedMultiplier;
 			const time = clock.getElapsedTime();
 
 			updateAI(delta);

@@ -84,8 +84,22 @@ export function activate(context: vscode.ExtensionContext) {
 						return;
 					}
 
-					const nextActionOptions = UNFOCUSED_ACTIONS.filter((action) => action !== lastUnfocusedAction);
-					const pool = nextActionOptions.length > 0 ? nextActionOptions : UNFOCUSED_ACTIONS;
+					const disabledActions = petViewProvider.getConfig().disabledActions;
+					const enabledActions = UNFOCUSED_ACTIONS.filter(
+						(action) => !disabledActions.includes(action)
+					);
+					if (enabledActions.length === 0) {
+						// All unfocused actions disabled — sleep immediately
+						petViewProvider.setMood({
+							mood: 'sleep',
+							message: 'Window inactive - sleeping'
+						});
+						return;
+					}
+					const nextActionOptions = enabledActions.filter(
+						(action) => action !== lastUnfocusedAction
+					);
+					const pool = nextActionOptions.length > 0 ? nextActionOptions : enabledActions;
 					const nextAction = pool[Math.floor(Math.random() * pool.length)];
 					lastUnfocusedAction = nextAction;
 					const durationSeconds = nextAction === 'walk' ? 3 : nextAction === 'peek' ? 1.5 : 2.2;
@@ -156,6 +170,15 @@ export function activate(context: vscode.ExtensionContext) {
 	// Monitor window state changes
 	context.subscriptions.push(
 		vscode.window.onDidChangeWindowState(handleWindowStateChange)
+	);
+
+	// Monitor configuration changes
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration('emotional-support')) {
+				petViewProvider.sendConfig();
+			}
+		})
 	);
 
 	// Check initial state
@@ -338,6 +361,29 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		this.onStateChange = handler;
 	}
 
+	public getConfig() {
+		const config = vscode.workspace.getConfiguration('emotional-support');
+		return {
+			accentColor: config.get<string>('accentColor', '#ff9f43'),
+			bodyColor: config.get<string>('bodyColor', '#ffffff'),
+			visorColor: config.get<string>('visorColor', '#343a40'),
+			limbColor: config.get<string>('limbColor', '#aabbaa'),
+			defaultEyeColor: config.get<string>('defaultEyeColor', '#00d2d3'),
+			successEyeColor: config.get<string>('successEyeColor', '#1dd1a1'),
+			errorEyeColor: config.get<string>('errorEyeColor', '#ff5252'),
+			idleAnimations: config.get<boolean>('idleAnimations', true),
+			reactToClicks: config.get<boolean>('reactToClicks', true),
+			animationSpeed: config.get<number>('animationSpeed', 1.0),
+			movementSpeed: config.get<number>('movementSpeed', 1.0),
+			unfocusedSleepDelay: config.get<number>('unfocusedSleepDelay', 20),
+			disabledActions: config.get<string[]>('disabledActions', [])
+		};
+	}
+
+	public sendConfig() {
+		this.view?.webview.postMessage({ command: 'SET_CONFIG', ...this.getConfig() });
+	}
+
 	public resolveWebviewView(webviewView: vscode.WebviewView) {
 		this.view = webviewView;
 		webviewView.webview.options = {
@@ -349,6 +395,7 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.onDidReceiveMessage((message) => {
 			switch (message?.command) {
 				case 'READY': {
+					this.sendConfig();
 					this.setMood({ mood: 'idle', message: 'Ready to swim.' });
 					this.setAutopilot(this.state.autopilotEnabled);
 					break;
