@@ -98,6 +98,8 @@ export default function App() {
 		const matMetal = new MeshLambertMaterial({ color: colors.metal });
 		const matEye = new MeshBasicMaterial({ color: colors.eyeCyan });
 
+		let defaultEyeColorHex = colors.eyeCyan;
+
 		const robot = new Group();
 		robot.position.set(0, -0.6, 2.5);
 		scene.add(robot);
@@ -215,7 +217,7 @@ export default function App() {
 		let mcpTimeoutId = 0;
 		let isUnfocused = document.hidden || !document.hasFocus();
 		let unfocusedIdleTimer = 0;
-		const unfocusedSleepDelay = 20;
+		let unfocusedSleepDelay = 20;
 		
 		const moveTarget = new Vector3();
 		const forwardDir = new Vector3(0, 0, 1);
@@ -313,7 +315,11 @@ export default function App() {
 
 		function setEyeColor(action: RobotActionName) {
 			const desired = robotActions[action].eyeColor;
-			matEye.color.setHex(getEyeColor(colors, desired));
+			if (!desired || desired === 'cyan') {
+				matEye.color.setHex(defaultEyeColorHex);
+			} else {
+				matEye.color.setHex(getEyeColor(colors, desired));
+			}
 		}
 
 		function updateAI(delta: number) {
@@ -604,6 +610,32 @@ export default function App() {
 
 		const onMessage = (event: MessageEvent) => {
 			const message = event.data;
+			if (message?.command === 'SET_CONFIG') {
+				if (typeof message.accentColor === 'string') {
+					const hex = parseInt(message.accentColor.replace('#', ''), 16);
+					if (!isNaN(hex)) {
+						matOrange.color.setHex(hex);
+					}
+				}
+				if (typeof message.defaultEyeColor === 'string') {
+					const hex = parseInt(message.defaultEyeColor.replace('#', ''), 16);
+					if (!isNaN(hex)) {
+						defaultEyeColorHex = hex;
+						setEyeColor(currentAction);
+					}
+				}
+				if (typeof message.idleAnimations === 'boolean') {
+					isAutoMode = message.idleAnimations;
+					if (isAutoMode) {
+						aiState = 'IDLE';
+						aiTimer = 0;
+					}
+				}
+				if (typeof message.unfocusedSleepDelay === 'number') {
+					unfocusedSleepDelay = message.unfocusedSleepDelay;
+				}
+				return;
+			}
 			if (message?.command === 'SET_MOOD' && typeof message?.mood === 'string' && isRobotAction(message.mood)) {
 				setRobotAction(message.mood);
 				mcpRequestedAction = message.mood;

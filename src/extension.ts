@@ -158,6 +158,15 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.onDidChangeWindowState(handleWindowStateChange)
 	);
 
+	// Monitor configuration changes
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration('emotional-support')) {
+				petViewProvider.sendConfig();
+			}
+		})
+	);
+
 	// Check initial state
 	handleWindowStateChange(vscode.window.state);
 
@@ -338,6 +347,20 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		this.onStateChange = handler;
 	}
 
+	public getConfig() {
+		const config = vscode.workspace.getConfiguration('emotional-support');
+		return {
+			accentColor: config.get<string>('accentColor', '#ff9f43'),
+			defaultEyeColor: config.get<string>('defaultEyeColor', '#00d2d3'),
+			idleAnimations: config.get<boolean>('idleAnimations', true),
+			unfocusedSleepDelay: config.get<number>('unfocusedSleepDelay', 20)
+		};
+	}
+
+	public sendConfig() {
+		this.view?.webview.postMessage({ command: 'SET_CONFIG', ...this.getConfig() });
+	}
+
 	public resolveWebviewView(webviewView: vscode.WebviewView) {
 		this.view = webviewView;
 		webviewView.webview.options = {
@@ -349,6 +372,7 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.onDidReceiveMessage((message) => {
 			switch (message?.command) {
 				case 'READY': {
+					this.sendConfig();
 					this.setMood({ mood: 'idle', message: 'Ready to swim.' });
 					this.setAutopilot(this.state.autopilotEnabled);
 					break;

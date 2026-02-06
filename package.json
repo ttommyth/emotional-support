@@ -69,7 +69,36 @@
         "id": "emotional-support.mcp",
         "label": "Emotional Support MCP Server"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Emotional Support",
+      "properties": {
+        "emotional-support.accentColor": {
+          "type": "string",
+          "default": "#ff9f43",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Accent color for the robot (chest plate, ears, antenna). Use a hex color value (e.g. #ff9f43)."
+        },
+        "emotional-support.defaultEyeColor": {
+          "type": "string",
+          "default": "#00d2d3",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Default eye color for the robot in idle/coding state. Use a hex color value (e.g. #00d2d3)."
+        },
+        "emotional-support.idleAnimations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable autopilot idle animations (walking, dancing, peeking)."
+        },
+        "emotional-support.unfocusedSleepDelay": {
+          "type": "number",
+          "default": 20,
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Seconds of inactivity before the robot falls asleep when the window is unfocused."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
