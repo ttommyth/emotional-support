@@ -28,6 +28,26 @@ export const PET_ACTIONS = [
 
 export type PetAction = (typeof PET_ACTIONS)[number];
 
+export const SCENE_PROP_TYPES = [
+	'paper',
+	'laptop',
+	'magnifying_glass',
+	'clipboard',
+	'wrench',
+	'test_tubes',
+	'lightbulb',
+	'book',
+	'coffee_mug',
+	'star',
+	'trophy'
+] as const;
+
+export type ScenePropType = (typeof SCENE_PROP_TYPES)[number];
+
+export const SCENE_POSITIONS = ['far-left', 'left', 'center-left', 'center', 'center-right', 'right', 'far-right', 'back-left', 'back', 'back-right', 'front', 'front-left', 'front-right'] as const;
+
+export type ScenePosition = (typeof SCENE_POSITIONS)[number];
+
 export type PetMoodPayload = {
 	mood: PetAction;
 	message?: string;

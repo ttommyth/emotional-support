@@ -1,31 +1,28 @@
-import * as THREE from 'three';
-import { createCodingProp } from './coding';
-import { createDebuggingProp } from './debugging';
-import { createReviewingProp } from './reviewing';
-import { createRefactoringProp } from './refactoring';
-import { createTestingProp } from './testing';
-import { createReadingProp } from './reading';
-import { createThinkingProp } from './thinking';
-import { createSuccessProp } from './success';
-import { createSleepParticles } from './sleep';
+/**
+ * Props system — dynamic registry for 3D props held by the robot.
+ *
+ * Props are 3D objects that appear in the robot's hands/above head during
+ * specific actions. This module manages their lifecycle:
+ *   hidden → held → dropping → ground → hidden (fade)
+ *
+ * The registry is a Map<string, PropState> keyed by action name, so new
+ * actions with props are automatically supported without editing this file.
+ */
 
-export type PropState = {
-	mesh: THREE.Object3D;
-	anchor: THREE.Object3D;
-	state: 'hidden' | 'held' | 'dropping' | 'ground';
-	vel: THREE.Vector3;
-};
+import * as THREE from 'three';
+import type { PropDefinition } from './helpers';
+import { createPropFromDefinition } from './helpers';
+
+// Re-export PropState from helpers for backward compatibility
+export type { PropState, PropDefinition, AnchorConfig } from './helpers';
 
 export type RobotProps = {
-	coding: PropState;
-	debugging: PropState;
-	reviewing: PropState;
-	refactoring: PropState;
-	testing: PropState;
-	reading: PropState;
-	thinking: PropState;
-	success: PropState;
+	/** Dynamic prop registry — keyed by action name */
+	items: Map<string, import('./helpers').PropState>;
+	/** Sleep Z particles (special case, not a standard prop) */
 	zParticles: Array<{ mesh: THREE.Sprite; offset: number }>;
+	/** Get a prop by action name */
+	get: (name: string) => import('./helpers').PropState | undefined;
 };
 
 export type CreatePropsInput = {
@@ -33,24 +30,35 @@ export type CreatePropsInput = {
 	bodyPivot: THREE.Object3D;
 };
 
+/**
+ * Creates the robot props registry from all registered action prop definitions.
+ * The actionPropDefs map is auto-collected from actions that have a `prop` field.
+ */
+export function createRobotProps(
+	{ scene, bodyPivot }: CreatePropsInput,
+	actionPropDefs: Map<string, PropDefinition>
+): RobotProps {
+	const items = new Map<string, import('./helpers').PropState>();
 
-export function createRobotProps({ scene, bodyPivot }: CreatePropsInput): RobotProps {
+	for (const [name, propDef] of actionPropDefs) {
+		items.set(name, createPropFromDefinition(propDef, scene, bodyPivot));
+	}
+
+	const zParticles = createSleepParticles(scene);
+
 	return {
-		coding: createCodingProp(scene, bodyPivot),
-		debugging: createDebuggingProp(scene, bodyPivot),
-		reviewing: createReviewingProp(scene, bodyPivot),
-		refactoring: createRefactoringProp(scene, bodyPivot),
-		testing: createTestingProp(scene, bodyPivot),
-		reading: createReadingProp(scene, bodyPivot),
-		thinking: createThinkingProp(scene, bodyPivot),
-		success: createSuccessProp(scene, bodyPivot),
-		zParticles: createSleepParticles(scene)
+		items,
+		zParticles,
+		get: (name: string) => items.get(name)
 	};
 }
 
+/**
+ * Per-frame prop lifecycle update.
+ * Handles held/dropping/ground/hidden state transitions for all registered props.
+ */
 export function updateProps(delta: number, action: string, props: RobotProps) {
-	const entries = Object.entries(props).filter(([key]) => key !== 'zParticles') as Array<[string, PropState]>;
-	for (const [key, prop] of entries) {
+	for (const [key, prop] of props.items) {
 		const isHeld = key === action && action !== 'walk';
 
 		if (isHeld && prop.state !== 'dropping') {
@@ -87,9 +95,32 @@ export function updateProps(delta: number, action: string, props: RobotProps) {
 			}
 		}
 	}
+
 	if (action !== 'sleep') {
 		props.zParticles.forEach((z) => {
 			z.mesh.visible = false;
 		});
 	}
+}
+
+function createSleepParticles(scene: THREE.Scene): RobotProps['zParticles'] {
+	const zParticles: RobotProps['zParticles'] = [];
+	for (let i = 0; i < 3; i++) {
+		const c = document.createElement('canvas');
+		c.width = 64;
+		c.height = 64;
+		const ctx = c.getContext('2d');
+		if (ctx) {
+			ctx.fillStyle = 'white';
+			ctx.font = 'bold 50px sans-serif';
+			ctx.fillText('Z', 10, 50);
+		}
+		const zSprite = new THREE.Sprite(
+			new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: 0 })
+		);
+		zSprite.scale.set(1.5, 1.5, 1.5);
+		scene.add(zSprite);
+		zParticles.push({ mesh: zSprite, offset: i * 2 });
+	}
+	return zParticles;
 }

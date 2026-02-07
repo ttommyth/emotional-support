@@ -1,4 +1,5 @@
-import type { RobotActionMap, RobotActionName, RobotActionTag } from '../types';
+import type { RobotActionDefinition, RobotActionMap, RobotActionName, RobotActionTag } from '../types';
+import type { PropDefinition } from './helpers';
 import { coding } from './coding';
 import { debugging } from './debugging';
 import { reviewing } from './reviewing';
@@ -25,7 +26,10 @@ import { walk } from './walk';
 import { wave } from './wave';
 import { peek } from './peek';
 
-export const robotActions: RobotActionMap = {
+/** All action definitions (may carry an optional `prop` field from defineAction) */
+type ActionWithProp = RobotActionDefinition & { prop?: PropDefinition };
+
+const allActions: ActionWithProp[] = [
 	idle,
 	thinking,
 	coding,
@@ -51,7 +55,20 @@ export const robotActions: RobotActionMap = {
 	shrug,
 	knocked,
 	peek
-};
+];
+
+/** Action map keyed by name — used by the animation loop */
+export const robotActions: RobotActionMap = Object.fromEntries(
+	allActions.map((a) => [a.name, a])
+) as RobotActionMap;
+
+/**
+ * Auto-collected prop definitions from all actions that have a `prop` field.
+ * Pass this to `createRobotProps()` so props are created dynamically.
+ */
+export const actionPropDefs: Map<string, PropDefinition> = new Map(
+	allActions.filter((a) => a.prop != null).map((a) => [a.name, a.prop!])
+);
 
 export function actionHasTag(action: RobotActionName, tag: RobotActionTag): boolean {
 	return robotActions[action].tags?.includes(tag) ?? false;

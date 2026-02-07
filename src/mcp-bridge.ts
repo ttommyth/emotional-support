@@ -8,7 +8,16 @@ export const MCP_STATE_FILE = 'mcp-robot-state.json';
 export type RobotControlState = {
 	mood?: PetAction;
 	autopilotEnabled: boolean;
+	sceneProps?: Array<{ id: string; type: string; label?: string; state: string }>;
 	updatedAt: string;
+};
+
+export type ScenePropCommandEntry = {
+	propId: string;
+	propType: string;
+	label?: string;
+	position?: string;
+	autoInteract?: boolean;
 };
 
 export type RobotControlCommand =
@@ -32,12 +41,44 @@ export type RobotControlCommand =
 			payload: { target: 'front' | 'left' | 'right' };
 			requestedAt: string;
 			source: 'mcp';
+	  }
+	| {
+			id: string;
+			type: 'setScene';
+			payload: { props: ScenePropCommandEntry[] };
+			requestedAt: string;
+			source: 'mcp';
+	  }
+	| {
+			id: string;
+			type: 'placeSceneProp';
+			payload: ScenePropCommandEntry & { durationSeconds?: number; finishBehavior?: string };
+			requestedAt: string;
+			source: 'mcp';
+	  }
+	| {
+			id: string;
+			type: 'removeSceneProp';
+			payload: { propId: string };
+			requestedAt: string;
+			source: 'mcp';
+	  }
+	| {
+			id: string;
+			type: 'interactWithProp';
+			payload: { propId: string; durationSeconds?: number; finishBehavior?: string };
+			requestedAt: string;
+			source: 'mcp';
 	  };
 
 export interface RobotControlTarget {
 	setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number }): void;
 	setAutopilot(enabled: boolean): void;
 	forceMove(target: 'front' | 'left' | 'right'): void;
+	setScene(payload: { props: ScenePropCommandEntry[] }): void;
+	placeSceneProp(payload: ScenePropCommandEntry & { durationSeconds?: number; finishBehavior?: string }): void;
+	removeSceneProp(payload: { propId: string }): void;
+	interactWithProp(payload: { propId: string; durationSeconds?: number; finishBehavior?: string }): void;
 	getState(): RobotControlState;
 }
 
@@ -133,6 +174,38 @@ export class McpBridge {
 						return;
 					}
 					this.target.forceMove(payload.target);
+					break;
+				}
+				case 'setScene': {
+					const payload = parsed.payload as { props?: unknown[] } | undefined;
+					if (!payload?.props || !Array.isArray(payload.props)) {
+						return;
+					}
+					this.target.setScene({ props: payload.props as ScenePropCommandEntry[] });
+					break;
+				}
+				case 'placeSceneProp': {
+					const payload = parsed.payload as (ScenePropCommandEntry & { durationSeconds?: number; finishBehavior?: string }) | undefined;
+					if (!payload?.propId || !payload?.propType) {
+						return;
+					}
+					this.target.placeSceneProp(payload);
+					break;
+				}
+				case 'removeSceneProp': {
+					const payload = parsed.payload as { propId?: string } | undefined;
+					if (!payload?.propId) {
+						return;
+					}
+					this.target.removeSceneProp({ propId: payload.propId });
+					break;
+				}
+				case 'interactWithProp': {
+					const payload = parsed.payload as { propId?: string; durationSeconds?: number; finishBehavior?: string } | undefined;
+					if (!payload?.propId) {
+						return;
+					}
+					this.target.interactWithProp({ propId: payload.propId, durationSeconds: payload.durationSeconds, finishBehavior: payload.finishBehavior });
 					break;
 				}
 				default:

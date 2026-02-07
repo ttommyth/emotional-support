@@ -19,9 +19,10 @@ webview-ui/               ← Vite + React + Three.js webview app
   src/App.tsx             ← Main scene: 3D robot, action state machine, autopilot AI
   src/robot/types.ts      ← RobotActionName, RobotActionDefinition, RobotTargets, tags
   src/robot/actions/      ← One file per action (idle.ts, coding.ts, wave.ts …)
-  src/robot/actions/index.ts  ← robotActions map, actionHasTag(), getActionsByTag()
-  src/robot/actions/props.ts  ← Prop lifecycle (create, update, drop, ground, fade)
-  src/robot/actions/eyes.ts   ← Eye-color resolution from RobotEyeColorName
+  src/robot/actions/helpers.ts ← defineAction(), PropDefinition, ANCHOR_PRESETS, transition helpers
+  src/robot/actions/index.ts   ← robotActions map, actionPropDefs, actionHasTag(), getActionsByTag()
+  src/robot/actions/props.ts   ← Dynamic prop registry (Map-based), lifecycle update
+  src/robot/actions/eyes.ts    ← Eye-color resolution from RobotEyeColorName
   src/control-panel/      ← Dev-only control panel webview
 
 hooks-samples/            ← Sample Cursor hook scripts for user installation
@@ -63,6 +64,10 @@ Communication uses `webview.postMessage` / `onDidReceiveMessage`. Message shapes
 | ext → web | `SET_MOOD` | `mood: PetAction`, `message?`, `durationSeconds?` |
 | ext → web | `SET_AUTOPILOT` | `enabled: boolean` |
 | ext → web | `FORCE_MOVE` | `target: 'front' \| 'left' \| 'right'` |
+| ext → web | `SET_SCENE` | `props: ScenePropCommandEntry[]` |
+| ext → web | `PLACE_SCENE_PROP` | `propId`, `propType`, `position?`, `autoInteract?`, `durationSeconds?` |
+| ext → web | `REMOVE_SCENE_PROP` | `propId` |
+| ext → web | `INTERACT_WITH_PROP` | `propId`, `durationSeconds?` |
 | ext → web | `SET_CONFIG` | All config fields from `emotional-support.*` settings |
 | web → ext | `READY` | (none) |
 | web → ext | `SET_MOOD` | `mood`, `message` |
@@ -75,41 +80,109 @@ The MCP server and extension communicate via JSON files in `globalStorageUri`:
 - `mcp-robot-command.json` — MCP server writes commands
 - `mcp-robot-state.json` — Extension writes current state
 
-`RobotControlCommand` is a discriminated union on `type`: `'setMood' | 'setAutopilot' | 'forceMove'`.
+`RobotControlCommand` is a discriminated union on `type`: `'setMood' | 'setAutopilot' | 'forceMove' | 'setScene' | 'placeSceneProp' | 'removeSceneProp' | 'interactWithProp'`.
 
 ### Action System
 
-Each action in `webview-ui/src/robot/actions/` exports a `RobotActionDefinition`:
+Actions live in `webview-ui/src/robot/actions/`. Use `defineAction()` from `helpers.ts` for actions with props (it auto-wires the `heldUpdate` into the update loop). Plain actions can directly export a `RobotActionDefinition`.
 
 ```ts
-{
-  name: RobotActionName;
-  apply: (time, context) => void;        // Per-frame target-setting
-  update?: (delta, time, context) => void; // Per-frame side effects
-  pre?: RobotActionTransition;            // Entry transition
-  post?: RobotActionTransition;           // Exit transition
-  tags?: RobotActionTag[];                // Categorization
-  eyeColor?: RobotEyeColorName;          // Eye color for this action
-}
+// Action WITH a prop — use defineAction()
+import { defineAction, ANCHOR_PRESETS } from './helpers';
+
+export const myAction = defineAction({
+  name: 'myAction',
+  tags: ['work'],
+  eyeColor: 'cyan',
+  apply: (time, { targets }) => { /* set targets each frame */ },
+  prop: {
+    anchor: { ...ANCHOR_PRESETS.frontHeld },    // or custom { position: [x,y,z], rotation: [x,y,z] }
+    buildMesh: () => { /* return THREE.Object3D */ },
+    heldUpdate: (mesh, time, delta) => { /* wobble, rotate while held */ }
+  }
+});
+
+// Action WITHOUT a prop — plain RobotActionDefinition
+import type { RobotActionDefinition } from '../types';
+
+export const mySimpleAction: RobotActionDefinition = {
+  name: 'mySimpleAction',
+  tags: ['idleFiller'],
+  apply: (time, { targets }) => { /* ... */ }
+};
 ```
 
 **Tags**: `work`, `idleLike`, `idleFiller`, `movement`, `sleep`, `restPose`, `blocksAutoLookAt`, `blocksBlink`, `skipPost`.
+
+**Available helpers** in `helpers.ts`:
+- `defineAction(config)` — creates a `RobotActionDefinition` with auto-wired prop updates
+- `ANCHOR_PRESETS` — common anchor positions: `frontHeld`, `leftHand`, `rightHand`, `aboveHead`, `headRight`
+- `createPoseTransitions(pose, preDuration, postDuration)` — generates matching pre/post transitions for pose-based actions (sit, laydown, etc.)
+- `smoothStep(p)`, `smootherStep(p)` — easing functions for transitions
 
 ### Pet Actions (Canonical List)
 
 The canonical list lives in `src/pet-mood-service.ts` as `PET_ACTIONS`. The webview `RobotActionName` type in `types.ts` must mirror it exactly. When adding a new action:
 1. Add to `PET_ACTIONS` array in `pet-mood-service.ts`
 2. Add to `RobotActionName` union in `webview-ui/src/robot/types.ts`
-3. Create `webview-ui/src/robot/actions/<name>.ts`
-4. Register in `webview-ui/src/robot/actions/index.ts`
+3. Create `webview-ui/src/robot/actions/<name>.ts` using `defineAction()` (if it has a prop) or plain `RobotActionDefinition`
+4. Import and add to the `allActions` array in `webview-ui/src/robot/actions/index.ts`
+5. That's it — props are auto-collected from actions that have a `prop` field
 
 ### Props System
 
-Props are 3D objects tied to action names. See `props.ts` for the `PropState` type and lifecycle: `hidden → held → dropping → ground → hidden (fade)`. Work actions typically have associated props.
+Props are 3D objects associated with actions via the `prop` field in `defineAction()`. The system uses a **dynamic Map-based registry** (`Map<string, PropState>`) keyed by action name. No need to edit `props.ts` when adding new props.
+
+**PropDefinition structure:**
+```ts
+{
+  anchor: AnchorConfig;           // { position: [x, y, z], rotation: [x, y, z] } relative to bodyPivot
+  buildMesh: () => THREE.Object3D; // Factory that creates the 3D mesh
+  heldUpdate?: (mesh, time, delta) => void; // Optional per-frame update while held
+}
+```
+
+**Lifecycle**: `hidden → held → dropping → ground → hidden (fade)` — managed automatically by `updateProps()`.
+
+**Anchor presets** (in `helpers.ts`):
+| Preset | Position | Use case |
+|---|---|---|
+| `frontHeld` | `[0, 0.6, 3.2]` | Two-handed items (laptop, clipboard) |
+| `leftHand` | `[-2.3, 1.3, 2.4]` | Left hand (wrench, tool) |
+| `rightHand` | `[2.3, 1.3, 2.4]` | Right hand (magnifying glass) |
+| `aboveHead` | `[0, 6.8, 1.1]` | Floating above head (star) |
+| `headRight` | `[2, 6, 1.2]` | Near right side of head (lightbulb) |
 
 ### Eye Colors
 
 `RobotEyeColorName`: `'cyan' | 'red' | 'green' | 'off' | 'purple' | 'calm'`. Resolved in `eyes.ts`. Configurable overrides via `emotional-support.defaultEyeColor`, `successEyeColor`, `errorEyeColor` settings.
+
+### Scene Props System
+
+Scene props are 3D objects placed on the ground independently of the robot. They live in `webview-ui/src/robot/scene-props.ts` with types in `types.ts`.
+
+**Available scene prop types**: `paper`, `laptop`, `magnifying_glass`, `clipboard`, `wrench`, `test_tubes`, `lightbulb`, `book` (interactive), `coffee_mug`, `star`, `trophy` (decoration-only).
+
+**Prop-to-action mapping** (`SCENE_PROP_ACTION_MAP` in `types.ts`): interactive props trigger a robot action when picked up (e.g., `paper` → `reading`, `laptop` → `coding`).
+
+**Named positions** (`SCENE_POSITION_COORDS`): `left`, `center-left`, `center`, `center-right`, `right`.
+
+**Scene prop lifecycle**: `spawning → idle → targeted → grabbed → (removed)` or `spawning → idle → despawning → (removed)`.
+
+**Interaction pipeline** (in `App.tsx`): When `autoInteract` is set or `INTERACT_WITH_PROP` is received:
+1. `walking` — robot walks toward the prop's position
+2. `bending` — robot bends down (body pivot tilts forward, arms reach)
+3. `grabbing` — prop scales to 0 and is removed; robot holds bent pose
+4. `rising` — robot stands back up
+5. On completion, the corresponding action starts (e.g., `reading`) with MCP override
+
+**MCP tools**: `set_scene`, `place_scene_prop`, `remove_scene_prop`, `interact_with_prop` (in `mcp-server.ts`).
+
+**Adding a new scene prop type**:
+1. Add to `SCENE_PROP_TYPES` in `pet-mood-service.ts`
+2. Add to `ScenePropType` union in `webview-ui/src/robot/types.ts`
+3. Add mapping in `SCENE_PROP_ACTION_MAP` (`null` for decoration-only)
+4. Add mesh builder in `scene-props.ts` (either `ACTION_MESH_REUSE` or `CUSTOM_BUILDERS`)
 
 ### Configuration
 

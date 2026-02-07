@@ -24,10 +24,12 @@ import {
 	WebGLRenderer
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry';
-import { getActionsByTag, robotActions } from './robot/actions';
+import { getActionsByTag, robotActions, actionPropDefs } from './robot/actions';
 import { getEyeColor } from './robot/actions/eyes';
 import { createRobotProps, updateProps } from './robot/actions/props';
-import type { RobotActionContext, RobotActionName, RobotTargets } from './robot/types';
+import { createScenePropsManager, buildScenePropMesh } from './robot/scene-props';
+import type { RobotActionContext, RobotActionName, RobotTargets, InteractionState, ScenePropType, FinishBehavior } from './robot/types';
+import { SCENE_PROP_ACTION_MAP, SCENE_POSITION_COORDS, GROUND_Y } from './robot/types';
 
 declare const acquireVsCodeApi: (() => { postMessage: (message: unknown) => void }) | undefined;
 
@@ -186,7 +188,7 @@ export default function App() {
 		const rightLeg = createLimb(1.2, -2.5, false);
 		bodyPivot.add(rightLeg);
 
-		const props = createRobotProps({ scene, bodyPivot });
+		const props = createRobotProps({ scene, bodyPivot }, actionPropDefs);
 
 		const targets: RobotTargets = {
 			body: { pos: new Vector3(), rot: new Vector3() },
@@ -225,6 +227,85 @@ export default function App() {
 		let unfocusedIdleTimer = 0;
 		let unfocusedSleepDelay = 20;
 		
+		// ─── Scene Props ─────────────────────────────────────────────────────
+		const sceneProps = createScenePropsManager(scene);
+		let interaction: InteractionState | null = null;
+
+		const BEND_DURATION = 0.5;
+		const GRAB_DURATION = 0.3;
+		const RISE_DURATION = 0.4;
+		const THROW_DURATION = 0.6;
+		const TOSS_DURATION = 0.5;
+		const PUT_DOWN_DURATION = 0.6;
+
+		// ─── Thrown prop projectile ──────────────────────────────────────────
+		let thrownPropMesh: Object3D | null = null;
+		let thrownPropTimer = 0;
+		let thrownPropDuration = 0;
+		let thrownPropStart = new Vector3();
+		let thrownPropEnd = new Vector3();
+		let thrownPropPeak = 0; // Y height at apex
+		let thrownPropSpin = 0;
+
+		function launchThrownProp(type: ScenePropType, start: Vector3, end: Vector3, peak: number, duration: number, spin: number) {
+			if (thrownPropMesh) {
+				scene.remove(thrownPropMesh);
+			}
+			thrownPropMesh = buildScenePropMesh(type);
+			thrownPropMesh.scale.set(0.7, 0.7, 0.7);
+			scene.add(thrownPropMesh);
+			thrownPropStart.copy(start);
+			thrownPropEnd.copy(end);
+			thrownPropPeak = peak;
+			thrownPropDuration = duration;
+			thrownPropTimer = 0;
+			thrownPropSpin = spin;
+		}
+
+		function updateThrownProp(delta: number) {
+			if (!thrownPropMesh) return;
+			thrownPropTimer += delta;
+			const p = Math.min(1, thrownPropTimer / thrownPropDuration);
+			// Parabolic arc
+			const x = thrownPropStart.x + (thrownPropEnd.x - thrownPropStart.x) * p;
+			const z = thrownPropStart.z + (thrownPropEnd.z - thrownPropStart.z) * p;
+			const baseY = thrownPropStart.y + (thrownPropEnd.y - thrownPropStart.y) * p;
+			const arcY = 4 * thrownPropPeak * p * (1 - p);
+			thrownPropMesh.position.set(x, baseY + arcY, z);
+			thrownPropMesh.rotation.x += thrownPropSpin * delta;
+			thrownPropMesh.rotation.z += thrownPropSpin * 0.7 * delta;
+			if (p >= 1) {
+				// Shrink and remove
+				thrownPropMesh.scale.multiplyScalar(0.8);
+				if (thrownPropMesh.scale.x < 0.05) {
+					scene.remove(thrownPropMesh);
+					thrownPropMesh = null;
+				}
+			}
+		}
+
+		function startInteraction(propId: string, durationAfterPickup: number, finishBehavior: FinishBehavior = 'none') {
+			const prop = sceneProps.getById(propId);
+			if (!prop) return;
+			const targetAction = SCENE_PROP_ACTION_MAP[prop.type];
+			if (!targetAction) return;
+			prop.state = 'targeted';
+			interaction = {
+				phase: 'walking',
+				propId,
+				propType: prop.type,
+				targetAction,
+				timer: 0,
+				durationAfterPickup,
+				finishBehavior
+			};
+			// Override AI and start walking toward prop — stop just behind it
+			mcpOverrideActive = true;
+			aiState = 'MOVING';
+			moveTarget.set(prop.worldX, 0, prop.worldZ + 0.3);
+			setRobotAction('walk');
+		}
+
 		const moveTarget = new Vector3();
 		const forwardDir = new Vector3(0, 0, 1);
 		const toCameraDir = new Vector3();
@@ -470,6 +551,236 @@ export default function App() {
 					setRobotAction('idle');
 					aiTimer = 0.5;
 				}
+			}
+		}
+
+		function updateInteraction(delta: number) {
+			if (!interaction) return;
+			const prop = sceneProps.getById(interaction.propId);
+
+			if (interaction.phase === 'walking') {
+				// Check if robot has arrived near the target
+				const dx = moveTarget.x - robot.position.x;
+				const dz = moveTarget.z - robot.position.z;
+				const dist = Math.sqrt(dx * dx + dz * dz);
+				if (dist < 0.5) {
+					// Arrived — face toward the prop then bend
+					if (prop) {
+						const toPropX = prop.worldX - robot.position.x;
+						const toPropZ = prop.worldZ - robot.position.z;
+						robot.rotation.y = Math.atan2(toPropX, toPropZ);
+					}
+					interaction.phase = 'bending';
+					interaction.timer = 0;
+					currentSpeed = 0;
+					aiState = 'IDLE';
+					setRobotAction('idle');
+				}
+				return;
+			}
+
+			interaction.timer += delta;
+
+			if (interaction.phase === 'bending') {
+				// Bend body forward and down
+				const p = Math.min(1, interaction.timer / BEND_DURATION);
+				const eased = p * p * (3 - 2 * p); // smoothstep
+				targets.body.pos.set(0, -1.5 * eased, 0.5 * eased);
+				targets.body.rot.set(0.6 * eased, 0, 0);
+				targets.leftArm.rot.set(-0.8 * eased, 0, 0.3 * eased);
+				targets.rightArm.rot.set(-0.8 * eased, 0, -0.3 * eased);
+				if (p >= 1) {
+					interaction.phase = 'grabbing';
+					interaction.timer = 0;
+					if (prop) {
+						prop.state = 'grabbed';
+						// Hide ground mesh immediately so it doesn't linger
+						prop.mesh.visible = false;
+					}
+				}
+				return;
+			}
+
+			if (interaction.phase === 'grabbing') {
+				// Hold bent pose briefly while prop shrinks
+				targets.body.pos.set(0, -1.5, 0.5);
+				targets.body.rot.set(0.6, 0, 0);
+				targets.leftArm.rot.set(-0.8, 0, 0.3);
+				targets.rightArm.rot.set(-0.8, 0, -0.3);
+				if (interaction.timer >= GRAB_DURATION) {
+					interaction.phase = 'rising';
+					interaction.timer = 0;
+				}
+				return;
+			}
+
+			if (interaction.phase === 'rising') {
+				// Rise back to standing
+				const p = Math.min(1, interaction.timer / RISE_DURATION);
+				const eased = p * p * (3 - 2 * p);
+				targets.body.pos.set(0, -1.5 * (1 - eased), 0.5 * (1 - eased));
+				targets.body.rot.set(0.6 * (1 - eased), 0, 0);
+				targets.leftArm.rot.set(-0.8 * (1 - eased), 0, 0.3 * (1 - eased));
+				targets.rightArm.rot.set(-0.8 * (1 - eased), 0, -0.3 * (1 - eased));
+				if (p >= 1) {
+					// Transition to performing the action
+					const targetAction = interaction.targetAction;
+					const duration = interaction.durationAfterPickup;
+					interaction.phase = 'performing';
+					interaction.timer = 0;
+					setRobotAction(targetAction);
+					mcpOverrideActive = true;
+					mcpRequestedAction = targetAction;
+					mcpDurationTimer = duration > 0 ? duration : 0;
+					if (mcpTimeoutId) {
+						window.clearTimeout(mcpTimeoutId);
+						mcpTimeoutId = 0;
+					}
+					if (mcpDurationTimer > 0) {
+						mcpTimeoutId = window.setTimeout(() => {
+							mcpDurationTimer = 0;
+						}, mcpDurationTimer * 1000);
+					}
+				}
+				return;
+			}
+
+			if (interaction.phase === 'performing') {
+				// Wait for MCP duration to expire, then trigger finish behavior
+				if (mcpDurationTimer <= 0) {
+					const finish = interaction.finishBehavior;
+					if (finish === 'throw_away') {
+						interaction.phase = 'throwing';
+						interaction.timer = 0;
+						setRobotAction('idle');
+					} else if (finish === 'throw_up') {
+						interaction.phase = 'tossing';
+						interaction.timer = 0;
+						setRobotAction('idle');
+					} else if (finish === 'put_down') {
+						interaction.phase = 'putting_down';
+						interaction.timer = 0;
+						setRobotAction('idle');
+					} else {
+						// No finish behavior — just end
+						interaction = null;
+						mcpOverrideActive = false;
+						setRobotAction('idle');
+						aiState = 'IDLE';
+						aiTimer = 0.5;
+					}
+				}
+				return;
+			}
+
+			if (interaction.phase === 'throwing') {
+				// Angry throw animation: wind up then hurl forward
+				const p = Math.min(1, interaction.timer / THROW_DURATION);
+				if (p < 0.4) {
+					// Wind up — pull arm back
+					const wp = p / 0.4;
+					targets.body.rot.set(0, -0.3 * wp, 0);
+					targets.rightArm.rot.set(-1.5 * wp, 0, -0.5 * wp);
+					targets.leftArm.rot.set(0.3 * wp, 0, 0.3 * wp);
+				} else {
+					// Throw forward
+					const tp = (p - 0.4) / 0.6;
+					const te = tp * tp * (3 - 2 * tp);
+					targets.body.rot.set(0.2 * te, 0.4 * te, 0);
+					targets.rightArm.rot.set(1.2 * te - 1.5 * (1 - te), 0, -0.3);
+					targets.leftArm.rot.set(-0.2, 0, 0.3);
+					if (tp > 0.1 && !thrownPropMesh) {
+						// Launch the prop
+						const startPos = new Vector3();
+						robot.getWorldPosition(startPos);
+						startPos.y += 2;
+						const throwDir = new Vector3(0, 0, 1).applyAxisAngle(new Vector3(0, 1, 0), robot.rotation.y);
+						const endPos = startPos.clone().addScaledVector(throwDir, 8);
+						endPos.y = GROUND_Y;
+						launchThrownProp(interaction.propType, startPos, endPos, 2, 0.8, 12);
+					}
+				}
+				if (p >= 1) {
+					interaction = null;
+					mcpOverrideActive = false;
+					aiState = 'IDLE';
+					aiTimer = 0.5;
+				}
+				return;
+			}
+
+			if (interaction.phase === 'tossing') {
+				// Celebratory toss — throw prop straight up with joy
+				const p = Math.min(1, interaction.timer / TOSS_DURATION);
+				if (p < 0.3) {
+					// Crouch down a bit then spring up
+					const wp = p / 0.3;
+					targets.body.pos.set(0, -0.5 * wp, 0);
+					targets.leftArm.rot.set(-0.5 * wp, 0, 0.3 * wp);
+					targets.rightArm.rot.set(-0.5 * wp, 0, -0.3 * wp);
+				} else {
+					// Spring up, arms go high
+					const tp = (p - 0.3) / 0.7;
+					const te = tp * tp * (3 - 2 * tp);
+					targets.body.pos.set(0, 0.5 * te, 0);
+					targets.leftArm.rot.set(-2.5 * te, 0, 0.5 * te);
+					targets.rightArm.rot.set(-2.5 * te, 0, -0.5 * te);
+					if (tp > 0.05 && !thrownPropMesh) {
+						const startPos = new Vector3();
+						robot.getWorldPosition(startPos);
+						startPos.y += 4;
+						const endPos = startPos.clone();
+						endPos.y += 12;
+						launchThrownProp(interaction.propType, startPos, endPos, 6, 1.5, 5);
+					}
+				}
+				if (p >= 1) {
+					interaction = null;
+					mcpOverrideActive = false;
+					setRobotAction('success');
+					mcpOverrideActive = true;
+					mcpRequestedAction = 'success';
+					mcpDurationTimer = 2;
+					if (mcpTimeoutId) { window.clearTimeout(mcpTimeoutId); mcpTimeoutId = 0; }
+					mcpTimeoutId = window.setTimeout(() => { mcpDurationTimer = 0; }, 2000);
+				}
+				return;
+			}
+
+			if (interaction.phase === 'putting_down') {
+				// Gently place prop back on ground
+				const p = Math.min(1, interaction.timer / PUT_DOWN_DURATION);
+				if (p < 0.5) {
+					// Bend down
+					const bp = p / 0.5;
+					const be = bp * bp * (3 - 2 * bp);
+					targets.body.pos.set(0, -1.2 * be, 0.4 * be);
+					targets.body.rot.set(0.5 * be, 0, 0);
+					targets.leftArm.rot.set(-0.6 * be, 0, 0.2 * be);
+					targets.rightArm.rot.set(-0.6 * be, 0, -0.2 * be);
+				} else {
+					// Rise back up (prop left on ground)
+					const rp = (p - 0.5) / 0.5;
+					const re = rp * rp * (3 - 2 * rp);
+					targets.body.pos.set(0, -1.2 * (1 - re), 0.4 * (1 - re));
+					targets.body.rot.set(0.5 * (1 - re), 0, 0);
+					targets.leftArm.rot.set(-0.6 * (1 - re), 0, 0.2 * (1 - re));
+					targets.rightArm.rot.set(-0.6 * (1 - re), 0, -0.2 * (1 - re));
+					if (rp > 0.1 && !thrownPropMesh) {
+						// Place a new prop on the ground at robot's position
+						const placeX = robot.position.x + Math.sin(robot.rotation.y) * 1.5;
+						const placeZ = robot.position.z + Math.cos(robot.rotation.y) * 1.5;
+						sceneProps.add(`placed-${Date.now()}`, interaction.propType, placeX, placeZ, false);
+					}
+				}
+				if (p >= 1) {
+					interaction = null;
+					mcpOverrideActive = false;
+					setRobotAction('idle');
+					aiState = 'IDLE';
+					aiTimer = 0.5;
+				}
+				return;
 			}
 		}
 
@@ -763,8 +1074,57 @@ export default function App() {
 				aiState = 'MOVING';
 				aiTimer = 4;
 				moveTarget.copy(target);
-				
+
 				setRobotAction('walk');
+				return;
+			}
+			// ─── Scene prop commands ─────────────────────────────────────────
+			if (message?.command === 'SET_SCENE' && Array.isArray(message?.props)) {
+				// Cancel any in-progress interaction
+				interaction = null;
+				sceneProps.clear();
+				let autoInteractId: string | undefined;
+				for (const entry of message.props as Array<{ propId: string; propType: string; label?: string; position?: string; autoInteract?: boolean }>) {
+					if (!entry.propId || !entry.propType) continue;
+					const coords = entry.position && SCENE_POSITION_COORDS[entry.position]
+						? SCENE_POSITION_COORDS[entry.position]
+						: { x: (Math.random() - 0.5) * 24, z: -8 + Math.random() * 9 };
+					sceneProps.add(entry.propId, entry.propType as ScenePropType, coords.x, coords.z, Boolean(entry.autoInteract), entry.label);
+					if (entry.autoInteract) autoInteractId = entry.propId;
+				}
+				if (autoInteractId) {
+					startInteraction(autoInteractId, 0, 'none');
+				}
+				return;
+			}
+			if (message?.command === 'PLACE_SCENE_PROP' && typeof message?.propId === 'string' && typeof message?.propType === 'string') {
+				const coords = message.position && SCENE_POSITION_COORDS[message.position]
+					? SCENE_POSITION_COORDS[message.position]
+					: { x: (Math.random() - 0.5) * 24, z: -8 + Math.random() * 9 };
+				sceneProps.add(message.propId, message.propType as ScenePropType, coords.x, coords.z, Boolean(message.autoInteract), typeof message.label === 'string' ? message.label : undefined);
+				if (message.autoInteract) {
+					const finish = (typeof message.finishBehavior === 'string' ? message.finishBehavior : 'none') as FinishBehavior;
+					const dur = typeof message.durationSeconds === 'number' ? message.durationSeconds : 5;
+					startInteraction(message.propId, dur, finish);
+				}
+				return;
+			}
+			if (message?.command === 'REMOVE_SCENE_PROP' && typeof message?.propId === 'string') {
+				// If we're interacting with this prop, cancel
+				if (interaction?.propId === message.propId) {
+					interaction = null;
+					mcpOverrideActive = false;
+					setRobotAction('idle');
+					aiState = 'IDLE';
+					aiTimer = 0;
+				}
+				sceneProps.remove(message.propId);
+				return;
+			}
+			if (message?.command === 'INTERACT_WITH_PROP' && typeof message?.propId === 'string') {
+				const duration = typeof message.durationSeconds === 'number' ? message.durationSeconds : 5;
+				const finish = (typeof message.finishBehavior === 'string' ? message.finishBehavior : 'none') as FinishBehavior;
+				startInteraction(message.propId, duration, finish);
 				return;
 			}
 		};
@@ -821,6 +1181,9 @@ export default function App() {
 			}
 			actionDef.update?.(delta, time, actionContext);
 
+			// Run interaction AFTER action targets are set, so bending/grabbing/rising overrides them
+			updateInteraction(delta);
+
 			const f = 0.1;
 			const lerpV = (c: Vector3, t: Vector3) => c.lerp(t, f);
 			const lerpR = (obj: Object3D, t: Vector3) => {
@@ -850,6 +1213,8 @@ export default function App() {
 
 			robot.updateMatrixWorld(true);
 			updateProps(delta, currentAction, props);
+			sceneProps.update(delta);
+			updateThrownProp(delta);
 
 			if (
 				!(robotActions[currentAction].tags?.includes('sleep') ?? false) &&
@@ -922,6 +1287,8 @@ export default function App() {
 			if (resizeRaf) cancelAnimationFrame(resizeRaf);
 			if (clickTimeoutId) clearTimeout(clickTimeoutId);
 			if (clickIntervalId) clearInterval(clickIntervalId);
+			if (thrownPropMesh) { scene.remove(thrownPropMesh); thrownPropMesh = null; }
+			sceneProps.clear();
 			renderer.dispose();
 			container.removeChild(renderer.domElement);
 		};

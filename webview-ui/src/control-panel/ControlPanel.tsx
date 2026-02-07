@@ -41,6 +41,22 @@ const ACTION_ORDER = [
 	'knocked'
 ];
 
+const SCENE_PROP_PRESETS: Array<{ label: string; type: string; icon: string }> = [
+	{ label: 'Paper', type: 'paper', icon: '📄' },
+	{ label: 'Laptop', type: 'laptop', icon: '💻' },
+	{ label: 'Book', type: 'book', icon: '📖' },
+	{ label: 'Clipboard', type: 'clipboard', icon: '📋' },
+	{ label: 'M. Glass', type: 'magnifying_glass', icon: '🔍' },
+	{ label: 'Wrench', type: 'wrench', icon: '🔧' },
+	{ label: 'Test Tubes', type: 'test_tubes', icon: '🧪' },
+	{ label: 'Lightbulb', type: 'lightbulb', icon: '💡' },
+	{ label: 'Coffee', type: 'coffee_mug', icon: '☕' },
+	{ label: 'Star', type: 'star', icon: '⭐' },
+	{ label: 'Trophy', type: 'trophy', icon: '🏆' }
+];
+
+const POSITIONS = ['far-left', 'left', 'center-left', 'center', 'center-right', 'right', 'far-right', 'back-left', 'back', 'back-right', 'front', 'front-left', 'front-right'];
+
 const DEFAULT_ACTIONS: string[] = ACTION_ORDER;
 
 const sortActions = (actions: string[]) => {
@@ -108,6 +124,15 @@ export default function ControlPanel() {
 		vscode.postMessage({ command: 'FORCE_MOVE', target });
 	};
 
+	const handlePlaceProp = (type: string, autoInteract: boolean) => {
+		const position = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
+		vscode.postMessage({ command: 'PLACE_SCENE_PROP', propType: type, position, autoInteract });
+	};
+
+	const handleClearScene = () => {
+		vscode.postMessage({ command: 'CLEAR_SCENE' });
+	};
+
 	return (
 		<div className="control-root">
 			<header className="control-header">
@@ -142,6 +167,35 @@ export default function ControlPanel() {
 				<button className="btn" type="button" onClick={() => handleMoveClick('right')}>
 					Peek Right
 				</button>
+			</div>
+		</section>
+
+		<section className="panel">
+			<h2>Scene Props</h2>
+			<p className="hint">Place props on the ground. Interactive props trigger robot pickup.</p>
+			<div className="grid">
+				{SCENE_PROP_PRESETS.map((preset) => (
+					<button key={preset.type} className="btn" type="button" onClick={() => handlePlaceProp(preset.type, false)}
+						title={`Place ${preset.label} on ground`}>
+						{preset.icon} {preset.label}
+					</button>
+				))}
+			</div>
+			<div className="panel-row" style={{ marginTop: '8px' }}>
+				<button className="btn primary" type="button" onClick={handleClearScene}>
+					Clear Scene
+				</button>
+				<p className="hint">Remove all ground props.</p>
+			</div>
+			<h3 style={{ marginTop: '8px', fontSize: '0.85em', opacity: 0.8 }}>Place &amp; Pick Up</h3>
+			<p className="hint">Place a prop and robot auto-walks to pick it up.</p>
+			<div className="grid">
+				{SCENE_PROP_PRESETS.filter(p => !['coffee_mug', 'star', 'trophy'].includes(p.type)).map((preset) => (
+					<button key={`auto-${preset.type}`} className="btn" type="button" onClick={() => handlePlaceProp(preset.type, true)}
+						title={`Place ${preset.label} and pick up`}>
+						{preset.icon} ➜
+					</button>
+				))}
 			</div>
 		</section>
 

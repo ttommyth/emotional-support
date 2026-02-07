@@ -62,6 +62,14 @@
       {
         "command": "emotional-support.installUserHook",
         "title": "Emotional Support: Install user-level Cursor hook"
+      },
+      {
+        "command": "emotional-support.placeSceneProp",
+        "title": "Emotional Support: Place Scene Prop"
+      },
+      {
+        "command": "emotional-support.clearScene",
+        "title": "Emotional Support: Clear Scene Props"
       }
     ],
     "mcpServerDefinitionProviders": [

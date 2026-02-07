@@ -3,9 +3,9 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { McpBridge, RobotControlState } from './mcp-bridge';
+import { McpBridge, RobotControlState, type ScenePropCommandEntry } from './mcp-bridge';
 import { CursorHookBridge } from './cursor-hook-bridge';
-import { PET_ACTIONS, PetAction, PetMoodService } from './pet-mood-service';
+import { PET_ACTIONS, PetAction, PetMoodService, SCENE_PROP_TYPES, SCENE_POSITIONS } from './pet-mood-service';
 
 let outputChannel: vscode.OutputChannel | undefined;
 
@@ -322,6 +322,46 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	const providerId = 'emotional-support.mcp';
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('emotional-support.placeSceneProp', async () => {
+			if (!petViewProvider.isReady()) {
+				vscode.window.showInformationMessage('Open the Emotional Support view first.');
+				return;
+			}
+			const propType = await vscode.window.showQuickPick(
+				SCENE_PROP_TYPES.map(t => ({ label: t, description: SCENE_PROP_TYPES.indexOf(t) < 8 ? 'Interactive' : 'Decoration' })),
+				{ placeHolder: 'Choose a prop type to place on the ground' }
+			);
+			if (!propType) return;
+			const position = await vscode.window.showQuickPick(
+				[...SCENE_POSITIONS, 'random'] as string[],
+				{ placeHolder: 'Choose a position' }
+			);
+			if (!position) return;
+			const autoInteract = await vscode.window.showQuickPick(
+				[{ label: 'Yes', description: 'Robot walks to prop and picks it up' }, { label: 'No', description: 'Just place the prop' }],
+				{ placeHolder: 'Auto-interact?' }
+			);
+			if (!autoInteract) return;
+			const propId = `cmd-${Date.now()}`;
+			petViewProvider.placeSceneProp({
+				propId,
+				propType: propType.label,
+				position: position === 'random' ? undefined : position,
+				autoInteract: autoInteract.label === 'Yes'
+			});
+		}),
+		vscode.commands.registerCommand('emotional-support.clearScene', () => {
+			if (!petViewProvider.isReady()) {
+				vscode.window.showInformationMessage('Open the Emotional Support view first.');
+				return;
+			}
+			petViewProvider.setScene({ props: [] });
+			vscode.window.showInformationMessage('Scene cleared.');
+		})
+	);
+
 	context.subscriptions.push(
 		vscode.lm.registerMcpServerDefinitionProvider(providerId, {
 			provideMcpServerDefinitions: () => {
@@ -350,7 +390,11 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 
 	private view: vscode.WebviewView | undefined;
 	private readonly extensionUri: vscode.Uri;
-	private readonly state: { currentMood?: PetAction; autopilotEnabled: boolean } = { autopilotEnabled: true };
+	private readonly state: {
+		currentMood?: PetAction;
+		autopilotEnabled: boolean;
+		sceneProps: Array<{ id: string; type: string; label?: string; state: string }>;
+	} = { autopilotEnabled: true, sceneProps: [] };
 	private onStateChange?: (state: RobotControlState) => void;
 
 	constructor(extensionUri: vscode.Uri) {
@@ -424,6 +468,7 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		return {
 			mood: this.state.currentMood,
 			autopilotEnabled: this.state.autopilotEnabled,
+			sceneProps: this.state.sceneProps.length > 0 ? this.state.sceneProps : undefined,
 			updatedAt: new Date().toISOString()
 		};
 	}
@@ -442,6 +487,32 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 
 	public forceMove(target: 'front' | 'left' | 'right') {
 		this.view?.webview.postMessage({ command: 'FORCE_MOVE', target });
+	}
+
+	public setScene(payload: { props: ScenePropCommandEntry[] }) {
+		this.state.sceneProps = payload.props.map(p => ({ id: p.propId, type: p.propType, label: p.label, state: 'idle' }));
+		this.view?.webview.postMessage({ command: 'SET_SCENE', props: payload.props });
+		this.onStateChange?.(this.getState());
+	}
+
+	public placeSceneProp(payload: ScenePropCommandEntry & { durationSeconds?: number; finishBehavior?: string }) {
+		this.state.sceneProps = this.state.sceneProps.filter(p => p.id !== payload.propId);
+		this.state.sceneProps.push({ id: payload.propId, type: payload.propType, label: payload.label, state: 'idle' });
+		this.view?.webview.postMessage({ command: 'PLACE_SCENE_PROP', ...payload });
+		this.onStateChange?.(this.getState());
+	}
+
+	public removeSceneProp(payload: { propId: string }) {
+		this.state.sceneProps = this.state.sceneProps.filter(p => p.id !== payload.propId);
+		this.view?.webview.postMessage({ command: 'REMOVE_SCENE_PROP', ...payload });
+		this.onStateChange?.(this.getState());
+	}
+
+	public interactWithProp(payload: { propId: string; durationSeconds?: number; finishBehavior?: string }) {
+		const prop = this.state.sceneProps.find(p => p.id === payload.propId);
+		if (prop) prop.state = 'targeted';
+		this.view?.webview.postMessage({ command: 'INTERACT_WITH_PROP', ...payload });
+		this.onStateChange?.(this.getState());
 	}
 
 	private getHtmlForWebview(webview: vscode.Webview) {
@@ -551,6 +622,32 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						return;
 					}
 					this.petViewProvider.forceMove(message.target);
+					break;
+				}
+				case 'PLACE_SCENE_PROP': {
+					if (typeof message?.propType !== 'string') {
+						return;
+					}
+					if (!this.petViewProvider.isReady()) {
+						vscode.window.showInformationMessage('Open the Emotional Support view to control the robot.');
+						return;
+					}
+					const propId = `cp-${Date.now()}`;
+					this.petViewProvider.placeSceneProp({
+						propId,
+						propType: message.propType,
+						position: typeof message.position === 'string' ? message.position : undefined,
+						autoInteract: Boolean(message.autoInteract),
+						durationSeconds: message.autoInteract ? 5 : undefined
+					});
+					break;
+				}
+				case 'CLEAR_SCENE': {
+					if (!this.petViewProvider.isReady()) {
+						vscode.window.showInformationMessage('Open the Emotional Support view to control the robot.');
+						return;
+					}
+					this.petViewProvider.setScene({ props: [] });
 					break;
 				}
 				default:
