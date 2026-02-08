@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
 	AmbientLight,
 	CapsuleGeometry,
@@ -34,6 +34,27 @@ import { SCENE_PROP_ACTION_MAP, SCENE_POSITION_COORDS, GROUND_Y } from './robot/
 declare const acquireVsCodeApi: (() => { postMessage: (message: unknown) => void }) | undefined;
 
 export default function App() {
+	const [toasts, setToasts] = useState<Array<{ id: number; text: string; fading: boolean }>>([]);
+	const toastIdRef = useRef(0);
+	const showThoughtBubblesRef = useRef(true);
+	const thoughtBubbleDurationRef = useRef(8);
+	const bubbleContainerRef = useRef<HTMLDivElement>(null);
+	/** Updated every frame from the render loop to position the bubble above the robot */
+	const bubbleScreenPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.1 });
+
+	const addToast = useCallback((text: string) => {
+		if (!showThoughtBubblesRef.current || !text) return;
+		const id = ++toastIdRef.current;
+		setToasts((prev) => [...prev.slice(-1), { id, text, fading: false }]); // keep max 2
+		const dur = thoughtBubbleDurationRef.current * 1000;
+		setTimeout(() => {
+			setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, fading: true } : t)));
+		}, dur - 800);
+		setTimeout(() => {
+			setToasts((prev) => prev.filter((t) => t.id !== id));
+		}, dur);
+	}, []);
+
 	useEffect(() => {
 		const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : { postMessage: () => undefined };
 		const container = document.getElementById('canvas-container') as HTMLDivElement | null;
@@ -238,6 +259,13 @@ export default function App() {
 		const TOSS_DURATION = 0.5;
 		const PUT_DOWN_DURATION = 0.6;
 
+		// ─── Ground-prop cleanup ─────────────────────────────────────────────
+		/** Seconds a ground prop must sit before the robot considers cleaning it */
+		const CLEANUP_ELIGIBLE_SECONDS = 8;
+		type CleanupPhase = 'walking' | 'bending' | 'grabbing' | 'rising' | 'celebrate';
+		type CleanupState = { phase: CleanupPhase; propName: string; timer: number };
+		let cleanup: CleanupState | null = null;
+
 		// ─── Thrown prop projectile ──────────────────────────────────────────
 		let thrownPropMesh: Object3D | null = null;
 		let thrownPropTimer = 0;
@@ -311,6 +339,11 @@ export default function App() {
 		const toCameraDir = new Vector3();
 		const yAxis = new Vector3(0, 1, 0);
     let currentSpeed = 0;
+		/** Timer for the trip animation — counts up while tripped */
+		let tripTimer = 0;
+		let isTripActive = false;
+		const TRIP_DURATION = 2.6; // must match tripped.ts export
+		const TRIP_CHANCE_PER_SECOND = 0.04; // ~4% per second while running
 		const moveBounds = { x: 10, zNear: 2, zRange: 6 };
 		const peekTargets = [
 			new Vector3(-7, -0.4, 8.5),
@@ -426,14 +459,38 @@ export default function App() {
 			if (!(robotActions[currentAction].tags?.includes('movement') ?? false) || aiState !== 'MOVING') {
 				return;
 			}
+			// MCP override walking (e.g. prop interaction) — fall through to
+			// the MOVING branch below even when autopilot is off.
 			}
 
-			if (!isAutoMode || robotActions[currentAction].tags?.includes('sleep')) return;
+			if ((!isAutoMode && !mcpOverrideActive) || robotActions[currentAction].tags?.includes('sleep')) return;
 
 			aiTimer -= delta;
 
 			if (aiState === 'IDLE') {
 				if (aiTimer <= 0) {
+					// ── Check for ground props that need cleaning up ──
+					if (!cleanup && !interaction && !disabledActions.has('tidyup') && !disabledActions.has('walk')) {
+						const groundProps = props.getGroundProps()
+							.filter(gp => gp.timer >= CLEANUP_ELIGIBLE_SECONDS);
+						if (groundProps.length > 0 && Math.random() < 0.6) {
+							// Pick the nearest one
+							let nearest = groundProps[0];
+							let bestDist = Infinity;
+							for (const gp of groundProps) {
+								const dx = gp.x - robot.position.x;
+								const dz = gp.z - robot.position.z;
+								const d = dx * dx + dz * dz;
+								if (d < bestDist) {
+									bestDist = d;
+									nearest = gp;
+								}
+							}
+							startCleanup(nearest.name);
+							return;
+						}
+					}
+
 					const r = Math.random();
 					const facingDot = getFacingDot();
 					const isFacingAwayOrSide = facingDot < 0.2;
@@ -480,7 +537,7 @@ export default function App() {
         const dist = direction.length();
 
         // CHANGE 2: Dynamic Speed & Action Selection Logic
-        if (dist < 0.2) {
+        if (dist < 0.2 && !isTripActive) {
           robot.position.copy(moveTarget);
           currentSpeed = 0; // Reset speed on stop
 
@@ -504,8 +561,12 @@ export default function App() {
           direction.normalize();
           
           // 1. Calculate Target Speed based on distance
-          // If far (>3 units), target fast speed (8), else slow speed (3.5)
-          let targetSpeed = (dist > 3 ? 8 : 3.5) * movementSpeedMultiplier;
+          // Three tiers: far (>5) = fast(8), mid (>2) = walk(3.5), close = stroll(1.8)
+          let targetSpeed: number;
+          if (dist > 5) targetSpeed = 8;
+          else if (dist > 2) targetSpeed = 3.5;
+          else targetSpeed = 1.8;
+          targetSpeed *= movementSpeedMultiplier;
 
           // 2. Apply Camera "Shyness" (Slow down if moving toward camera)
           toCameraDir.subVectors(camera.position, robot.position).setY(0);
@@ -525,14 +586,40 @@ export default function App() {
           // 4. Move Robot
           robot.position.addScaledVector(direction, currentSpeed * delta);
 
-          // 5. Pick Correct Action (Run vs Walk)
-          // Threshold is 5.5. We check isRobotAction('run') to ensure it exists before switching.
-          const runThreshold = 5.5;
-          const correctAction = (currentSpeed > runThreshold && isRobotAction('running')) ? 'running' : 'walk';
-          
-          // Only switch if we are currently in a locomotion state (prevents overriding 'wave' accidentally if called elsewhere)
-          if (currentAction === 'walk' || currentAction === 'running') {
-             setRobotAction(correctAction);
+          // 5. Pick Correct Action (Run vs Walk vs Stroll) + Trip
+          const isLocomotion = currentAction === 'walk' || currentAction === 'running' || currentAction === 'stroll';
+
+          // Handle active trip animation
+          if (isTripActive) {
+            tripTimer += delta;
+            // Slow down during trip
+            currentSpeed = MathUtils.lerp(currentSpeed, 0, delta * 3);
+            if (tripTimer >= TRIP_DURATION) {
+              isTripActive = false;
+              tripTimer = 0;
+              // Resume walking after recovery
+              setRobotAction('walk');
+            }
+          } else if (isLocomotion) {
+            // Random trip while running
+            if (currentAction === 'running' && Math.random() < TRIP_CHANCE_PER_SECOND * delta) {
+              isTripActive = true;
+              tripTimer = 0;
+              setRobotAction('tripped');
+            } else {
+              // Three-tier locomotion selection
+              const runThreshold = 5.5;
+              const strollThreshold = 2.2;
+              let correctAction: RobotActionName;
+              if (currentSpeed > runThreshold && isRobotAction('running')) {
+                correctAction = 'running';
+              } else if (currentSpeed < strollThreshold && isRobotAction('stroll')) {
+                correctAction = 'stroll';
+              } else {
+                correctAction = 'walk';
+              }
+              setRobotAction(correctAction);
+            }
           }
 
           // 6. Rotation Logic (Existing)
@@ -784,6 +871,119 @@ export default function App() {
 			}
 		}
 
+		/**
+		 * Start cleaning up a ground prop (action prop that fell).
+		 * The robot walks to it, bends down, picks it up, and does
+		 * a little satisfied reaction.
+		 */
+		function startCleanup(propName: string) {
+			const propState = props.get(propName);
+			if (!propState || propState.state !== 'ground') return;
+			cleanup = { phase: 'walking', propName, timer: 0 };
+			mcpOverrideActive = true; // ensure walking works even with autopilot off
+			aiState = 'MOVING';
+			moveTarget.set(propState.mesh.position.x, 0, propState.mesh.position.z + 0.5);
+			setRobotAction('walk');
+		}
+
+		/**
+		 * Per-frame update for the ground-prop cleanup state machine.
+		 */
+		function updateCleanup(delta: number) {
+			if (!cleanup) return;
+			const propState = props.get(cleanup.propName);
+
+			// If the prop vanished (auto-faded) while we were going there, abort
+			if (!propState || propState.state !== 'ground') {
+				cleanup = null;
+				mcpOverrideActive = false;
+				setRobotAction('idle');
+				aiState = 'IDLE';
+				aiTimer = 0.5;
+				return;
+			}
+
+			if (cleanup.phase === 'walking') {
+				const dx = moveTarget.x - robot.position.x;
+				const dz = moveTarget.z - robot.position.z;
+				const dist = Math.sqrt(dx * dx + dz * dz);
+				if (dist < 0.5) {
+					// Face the prop
+					const toPropX = propState.mesh.position.x - robot.position.x;
+					const toPropZ = propState.mesh.position.z - robot.position.z;
+					robot.rotation.y = Math.atan2(toPropX, toPropZ);
+					cleanup.phase = 'bending';
+					cleanup.timer = 0;
+					currentSpeed = 0;
+					aiState = 'IDLE';
+					setRobotAction('tidyup');
+				}
+				return;
+			}
+
+			cleanup.timer += delta;
+
+			if (cleanup.phase === 'bending') {
+				// Bend forward (same motion as scene-prop interaction)
+				const p = Math.min(1, cleanup.timer / BEND_DURATION);
+				const eased = p * p * (3 - 2 * p);
+				targets.body.pos.set(0, -1.5 * eased, 0.5 * eased);
+				targets.body.rot.set(0.6 * eased, 0, 0);
+				targets.leftArm.rot.set(-0.8 * eased, 0, 0.3 * eased);
+				targets.rightArm.rot.set(-0.8 * eased, 0, -0.3 * eased);
+				if (p >= 1) {
+					cleanup.phase = 'grabbing';
+					cleanup.timer = 0;
+					// Immediately hide the ground prop
+					propState.state = 'hidden';
+					propState.groundTimer = 0;
+					propState.mesh.visible = false;
+					propState.mesh.scale.set(0, 0, 0);
+				}
+				return;
+			}
+
+			if (cleanup.phase === 'grabbing') {
+				// Hold bent pose briefly
+				targets.body.pos.set(0, -1.5, 0.5);
+				targets.body.rot.set(0.6, 0, 0);
+				targets.leftArm.rot.set(-0.8, 0, 0.3);
+				targets.rightArm.rot.set(-0.8, 0, -0.3);
+				if (cleanup.timer >= GRAB_DURATION) {
+					cleanup.phase = 'rising';
+					cleanup.timer = 0;
+				}
+				return;
+			}
+
+			if (cleanup.phase === 'rising') {
+				// Stand back up
+				const p = Math.min(1, cleanup.timer / RISE_DURATION);
+				const eased = p * p * (3 - 2 * p);
+				targets.body.pos.set(0, -1.5 * (1 - eased), 0.5 * (1 - eased));
+				targets.body.rot.set(0.6 * (1 - eased), 0, 0);
+				targets.leftArm.rot.set(-0.8 * (1 - eased), 0, 0.3 * (1 - eased));
+				targets.rightArm.rot.set(-0.8 * (1 - eased), 0, -0.3 * (1 - eased));
+				if (p >= 1) {
+					cleanup.phase = 'celebrate';
+					cleanup.timer = 0;
+					setRobotAction('success');
+				}
+				return;
+			}
+
+			if (cleanup.phase === 'celebrate') {
+				// Brief satisfied reaction then done
+				if (cleanup.timer >= 1.5) {
+					cleanup = null;
+					mcpOverrideActive = false;
+					setRobotAction('idle');
+					aiState = 'IDLE';
+					aiTimer = 1 + Math.random() * 2;
+				}
+			}
+		}
+
 		const actionContext: RobotActionContext = {
 			targets,
 			props,
@@ -832,7 +1032,10 @@ export default function App() {
 				return;
 			}
 
-			// Stop current action/destination before reacting
+			// Stop current action/destination before reacting — but never
+			// interrupt an active prop interaction or cleanup walk
+			if (interaction || cleanup) return;
+
 			if (mcpOverrideActive) {
 				mcpOverrideActive = false;
 				mcpRequestedAction = 'idle';
@@ -1016,10 +1219,23 @@ export default function App() {
 				if (Array.isArray(message.disabledActions)) {
 					disabledActions = new Set(message.disabledActions.filter((a: unknown) => typeof a === 'string'));
 				}
+				if (typeof message.showThoughtBubbles === 'boolean') {
+					showThoughtBubblesRef.current = message.showThoughtBubbles;
+				}
+				if (typeof message.thoughtBubbleDuration === 'number') {
+					thoughtBubbleDurationRef.current = Math.max(3, Math.min(30, message.thoughtBubbleDuration));
+				}
+				return;
+			}
+			if (message?.command === 'SHOW_TOAST' && typeof message?.text === 'string') {
+				addToast(message.text);
 				return;
 			}
 			if (message?.command === 'SET_MOOD' && typeof message?.mood === 'string' && isRobotAction(message.mood)) {
 				setRobotAction(message.mood);
+				if (typeof message.message === 'string' && message.message) {
+					addToast(message.message);
+				}
 				mcpRequestedAction = message.mood;
 				mcpOverrideActive = message.mood !== 'idle';
 				if (message.mood === 'walk') {
@@ -1093,7 +1309,7 @@ export default function App() {
 					if (entry.autoInteract) autoInteractId = entry.propId;
 				}
 				if (autoInteractId) {
-					startInteraction(autoInteractId, 0, 'none');
+					startInteraction(autoInteractId, 5, 'none');
 				}
 				return;
 			}
@@ -1183,6 +1399,8 @@ export default function App() {
 
 			// Run interaction AFTER action targets are set, so bending/grabbing/rising overrides them
 			updateInteraction(delta);
+			// Run ground-prop cleanup (same override pattern)
+			updateCleanup(delta);
 
 			const f = 0.1;
 			const lerpV = (c: Vector3, t: Vector3) => c.lerp(t, f);
@@ -1242,6 +1460,25 @@ export default function App() {
 
 
 			renderer.render(scene, camera);
+
+			// ─── Project robot head to screen space for thought bubble ───
+			{
+				const headWorldPos = new Vector3();
+				antennaBall.getWorldPosition(headWorldPos);
+				// Offset above the antenna
+				headWorldPos.y += 2.0;
+				const projected = headWorldPos.clone().project(camera);
+				// NDC (-1..1) to fraction (0..1), clamped to keep bubbles on-screen
+				const sx = Math.max(0.1, Math.min(0.9, (projected.x + 1) / 2));
+				const sy = Math.max(0.05, Math.min(0.75, (1 - projected.y) / 2));
+				bubbleScreenPosRef.current.x = sx;
+				bubbleScreenPosRef.current.y = sy;
+				const bEl = bubbleContainerRef.current;
+				if (bEl) {
+					bEl.style.left = `${(sx * 100).toFixed(1)}%`;
+					bEl.style.top = `${(sy * 100).toFixed(1)}%`;
+				}
+			}
 		}
 
 		let resizeRaf = 0;
@@ -1297,6 +1534,23 @@ export default function App() {
 	return (
 		<>
 			<div id="canvas-container" />
+			{toasts.length > 0 && (
+				<div
+					ref={bubbleContainerRef}
+					className="thought-bubble-container"
+					style={{
+						left: `${(bubbleScreenPosRef.current.x * 100).toFixed(1)}%`,
+						top: `${(bubbleScreenPosRef.current.y * 100).toFixed(1)}%`
+					}}
+				>
+					{toasts.map((toast) => (
+						<div key={toast.id} className={`thought-bubble${toast.fading ? ' thought-bubble--fading' : ''}`}>
+							<span className="thought-bubble__text">{toast.text}</span>
+							<div className="thought-bubble__tail" />
+						</div>
+					))}
+				</div>
+			)}
 		</>
 	);
 }

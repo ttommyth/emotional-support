@@ -6,8 +6,12 @@ import * as path from 'path';
 import { McpBridge, RobotControlState, type ScenePropCommandEntry } from './mcp-bridge';
 import { CursorHookBridge } from './cursor-hook-bridge';
 import { PET_ACTIONS, PetAction, PetMoodService, SCENE_PROP_TYPES, SCENE_POSITIONS } from './pet-mood-service';
+import { WorkspaceVibeService, type WorkspaceVibe } from './workspace-vibe-service';
+import { MoodInterpreter, type Personality } from './mood-interpreter';
+import { MoodHistoryService } from './mood-history-service';
 
 let outputChannel: vscode.OutputChannel | undefined;
+let activeMoodHistory: MoodHistoryService | undefined;
 
 export function getOutputChannel(): vscode.OutputChannel {
 	if (!outputChannel) {
@@ -38,6 +42,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const UNFOCUSED_BACKOFF_BASE_MS = 15000; // 15 seconds
 	const UNFOCUSED_BACKOFF_MULTIPLIER = 1.9;
 	const UNFOCUSED_BACKOFF_STEPS = 3;
+	const FOCUS_REACTION_MIN_AWAY_MS = 30_000; // only react after 30s away
 	const UNFOCUSED_ACTIONS: PetAction[] = [
 		'lookaround',
 		'stretch',
@@ -126,11 +131,17 @@ export function activate(context: vscode.ExtensionContext) {
 		const isFocused = state.focused;
 		
 		if (!isFocused) {
-			// Window lost focus
+			// Window lost focus — start unfocused cycle after a grace period
 			if (!lastFocusLostTime) {
 				lastFocusLostTime = Date.now();
 			}
-			startUnfocusedBehaviorCycle('window-blur');
+			// Delay the unfocused behavior cycle so quick alt-tabs don't trigger reactions
+			clearAllTimers();
+			windowFocusTimer = setTimeout(() => {
+				if (!vscode.window.state.focused && lastFocusLostTime) {
+					startUnfocusedBehaviorCycle('window-blur');
+				}
+			}, FOCUS_REACTION_MIN_AWAY_MS);
 			getOutputChannel().appendLine(`[WindowMonitor] Window lost focus at ${new Date().toISOString()}`);
 		} else {
 			// Window gained focus
@@ -138,9 +149,17 @@ export function activate(context: vscode.ExtensionContext) {
 				const inactiveTimeMs = Date.now() - lastFocusLostTime;
 				const inactiveTimeMin = Math.floor(inactiveTimeMs / 60000);
 				getOutputChannel().appendLine(`[WindowMonitor] Window regained focus after ${inactiveTimeMin} minutes inactive`);
-				if (petViewProvider.isReady()) {
+				// Only show welcome-back if away long enough to matter
+				if (petViewProvider.isReady() && inactiveTimeMs >= FOCUS_REACTION_MIN_AWAY_MS) {
 					petViewProvider.setAutopilot(true);
-					petViewProvider.setMood({ mood: 'idle', message: 'Focus regained.' });
+					// Use the mood interpreter for a personalized welcome back
+					const currentVibe = vibeService.getCurrentVibe();
+					const welcomeReaction = moodInterpreter.welcomeBack(currentVibe);
+					petViewProvider.setMood({
+						mood: welcomeReaction.mood,
+						message: welcomeReaction.message,
+						durationSeconds: welcomeReaction.durationSeconds
+					});
 					if (Math.random() < 0.3) {
 						petViewProvider.forceMove('front');
 					}
@@ -167,6 +186,81 @@ export function activate(context: vscode.ExtensionContext) {
 		petViewProvider.setMood(payload);
 	});
 
+	// ─── Workspace Vibe System ────────────────────────────────────────────
+	const moodInterpreter = new MoodInterpreter();
+	const moodHistory = new MoodHistoryService();
+	activeMoodHistory = moodHistory;
+	let vibeReactionsEnabled = true;
+
+	const handleVibeChange = (vibe: WorkspaceVibe) => {
+		moodHistory.record(vibe);
+
+		if (!vibeReactionsEnabled || !petViewProvider.isReady() || !vscode.window.state.focused) {
+			return;
+		}
+
+		// Check for milestone moments first
+		if (moodHistory.justClearedErrors()) {
+			const reaction = moodInterpreter.celebrate('All errors cleared!');
+			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds });
+			if (reaction.sceneAction?.type === 'place') {
+				petViewProvider.placeSceneProp({
+					propId: `vibe-${Date.now()}`,
+					propType: reaction.sceneAction.propType,
+					autoInteract: reaction.sceneAction.autoInteract
+				});
+			}
+			return;
+		}
+
+		if (moodHistory.justRelieved()) {
+			const reaction = moodInterpreter.celebrate('Stress level dropped — you crushed it!');
+			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds });
+			return;
+		}
+
+		// Normal vibe interpretation — only change pose, stay quiet
+		// (milestones/celebrations above already have messages)
+		const reaction = moodInterpreter.interpret(vibe);
+		if (!reaction) {return;}
+
+		// 20% chance to actually show a message, otherwise silent pose change
+		const showMessage = Math.random() < 0.2;
+		petViewProvider.setMood({
+			mood: reaction.mood,
+			message: showMessage ? reaction.message : undefined,
+			durationSeconds: reaction.durationSeconds
+		});
+
+		if (reaction.sceneAction?.type === 'place') {
+			petViewProvider.placeSceneProp({
+				propId: `vibe-${Date.now()}`,
+				propType: reaction.sceneAction.propType,
+				autoInteract: reaction.sceneAction.autoInteract
+			});
+		} else if (reaction.sceneAction?.type === 'clear') {
+			petViewProvider.setScene({ props: [] });
+		}
+	};
+
+	const vibeService = new WorkspaceVibeService(handleVibeChange);
+
+	// Read initial config for vibe system
+	const updateVibeConfig = () => {
+		const config = vscode.workspace.getConfiguration('emotional-support');
+		vibeReactionsEnabled = config.get<boolean>('vibeReactions', true);
+		const personality = config.get<string>('personality', 'supportive');
+		if (personality === 'supportive' || personality === 'sarcastic' || personality === 'stoic') {
+			moodInterpreter.setPersonality(personality as Personality);
+		}
+		vibeService.updateConfig({
+			highErrorThreshold: config.get<number>('highErrorThreshold', 10)
+		});
+	};
+	updateVibeConfig();
+	vibeService.start();
+	context.subscriptions.push(vibeService);
+
 	// Monitor window state changes
 	context.subscriptions.push(
 		vscode.window.onDidChangeWindowState(handleWindowStateChange)
@@ -177,6 +271,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration('emotional-support')) {
 				petViewProvider.sendConfig();
+				updateVibeConfig();
 			}
 		})
 	);
@@ -198,12 +293,24 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 	);
 	if (isDevMode) {
-		const controlViewProvider = new PetControlViewProvider(context.extensionUri, petViewProvider);
+		const controlViewProvider = new PetControlViewProvider(context.extensionUri, petViewProvider, vibeService, moodHistory);
 		context.subscriptions.push(
 			vscode.window.registerWebviewViewProvider(PetControlViewProvider.viewType, controlViewProvider, {
 				webviewOptions: { retainContextWhenHidden: true }
 			})
 		);
+	} else {
+		// Register control panel when user opts in via settings
+		const showControlPanel = vscode.workspace.getConfiguration('emotional-support').get<boolean>('showControlPanel', false);
+		if (showControlPanel) {
+			vscode.commands.executeCommand('setContext', 'emotional-support.showControlPanel', true);
+			const controlViewProvider = new PetControlViewProvider(context.extensionUri, petViewProvider, vibeService, moodHistory);
+			context.subscriptions.push(
+				vscode.window.registerWebviewViewProvider(PetControlViewProvider.viewType, controlViewProvider, {
+					webviewOptions: { retainContextWhenHidden: true }
+				})
+			);
+		}
 	}
 
 	moodService.start();
@@ -247,6 +354,26 @@ export function activate(context: vscode.ExtensionContext) {
 			const nextIndex = (PET_ACTIONS.indexOf(currentMood) + 1) % PET_ACTIONS.length;
 			const nextMood = PET_ACTIONS[nextIndex];
 			petViewProvider.setMood({ mood: nextMood, message: 'Demo mood update.' });
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('emotional-support.showSessionSummary', () => {
+			moodHistory.printSummary();
+			getOutputChannel().show(true);
+		}),
+		vscode.commands.registerCommand('emotional-support.showVibeStatus', () => {
+			const vibe = vibeService.getCurrentVibe();
+			const ch = getOutputChannel();
+			ch.appendLine('');
+			ch.appendLine(`\u2500\u2500\u2500 Current Vibe \u2500\u2500\u2500`);
+			ch.appendLine(`  Stress:    ${vibe.stressScore}/100`);
+			ch.appendLine(`  Errors:    ${vibe.errorCount}`);
+			ch.appendLine(`  Warnings:  ${vibe.warningCount}`);
+			ch.appendLine(`  Git:       ${vibe.gitState}`);
+			ch.appendLine(`  Summary:   ${vibe.summary}`);
+			ch.appendLine('');
+			ch.show(true);
 		})
 	);
 
@@ -333,17 +460,17 @@ export function activate(context: vscode.ExtensionContext) {
 				SCENE_PROP_TYPES.map(t => ({ label: t, description: SCENE_PROP_TYPES.indexOf(t) < 8 ? 'Interactive' : 'Decoration' })),
 				{ placeHolder: 'Choose a prop type to place on the ground' }
 			);
-			if (!propType) return;
+			if (!propType) {return;}
 			const position = await vscode.window.showQuickPick(
 				[...SCENE_POSITIONS, 'random'] as string[],
 				{ placeHolder: 'Choose a position' }
 			);
-			if (!position) return;
+			if (!position) {return;}
 			const autoInteract = await vscode.window.showQuickPick(
 				[{ label: 'Yes', description: 'Robot walks to prop and picks it up' }, { label: 'No', description: 'Just place the prop' }],
 				{ placeHolder: 'Auto-interact?' }
 			);
-			if (!autoInteract) return;
+			if (!autoInteract) {return;}
 			const propId = `cmd-${Date.now()}`;
 			petViewProvider.placeSceneProp({
 				propId,
@@ -383,7 +510,12 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 }
 
-export function deactivate() {}
+export function deactivate() {
+	if (activeMoodHistory) {
+		activeMoodHistory.printSummary();
+		activeMoodHistory = undefined;
+	}
+}
 
 class PetViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'emotional-support.petView';
@@ -420,7 +552,9 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 			animationSpeed: config.get<number>('animationSpeed', 1.0),
 			movementSpeed: config.get<number>('movementSpeed', 1.0),
 			unfocusedSleepDelay: config.get<number>('unfocusedSleepDelay', 20),
-			disabledActions: config.get<string[]>('disabledActions', [])
+			disabledActions: config.get<string[]>('disabledActions', []),
+			showThoughtBubbles: config.get<boolean>('showThoughtBubbles', true),
+			thoughtBubbleDuration: config.get<number>('thoughtBubbleDuration', 8)
 		};
 	}
 
@@ -510,7 +644,7 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 
 	public interactWithProp(payload: { propId: string; durationSeconds?: number; finishBehavior?: string }) {
 		const prop = this.state.sceneProps.find(p => p.id === payload.propId);
-		if (prop) prop.state = 'targeted';
+		if (prop) {prop.state = 'targeted';}
 		this.view?.webview.postMessage({ command: 'INTERACT_WITH_PROP', ...payload });
 		this.onStateChange?.(this.getState());
 	}
@@ -560,10 +694,20 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 	private view: vscode.WebviewView | undefined;
 	private readonly extensionUri: vscode.Uri;
 	private readonly petViewProvider: PetViewProvider;
+	private readonly vibeService: WorkspaceVibeService;
+	private readonly moodHistory: MoodHistoryService;
+	private vibeUpdateInterval: NodeJS.Timeout | undefined;
 
-	constructor(extensionUri: vscode.Uri, petViewProvider: PetViewProvider) {
+	constructor(
+		extensionUri: vscode.Uri,
+		petViewProvider: PetViewProvider,
+		vibeService: WorkspaceVibeService,
+		moodHistory: MoodHistoryService
+	) {
 		this.extensionUri = extensionUri;
 		this.petViewProvider = petViewProvider;
+		this.vibeService = vibeService;
+		this.moodHistory = moodHistory;
 	}
 
 	public resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -577,11 +721,59 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.onDidReceiveMessage((message) => {
 			switch (message?.command) {
 				case 'READY': {
+					const vibe = this.vibeService.getCurrentVibe();
+					const summary = this.moodHistory.getSummary();
+					const config = vscode.workspace.getConfiguration('emotional-support');
 					webviewView.webview.postMessage({
 						command: 'INIT',
 						actions: PET_ACTIONS,
-						autopilotEnabled: this.petViewProvider.getState().autopilotEnabled
+						autopilotEnabled: this.petViewProvider.getState().autopilotEnabled,
+						vibe,
+						sessionSummary: summary,
+						personality: config.get<string>('personality', 'supportive'),
+						vibeReactions: config.get<boolean>('vibeReactions', true)
 					});
+					// Start periodic vibe updates
+					if (this.vibeUpdateInterval) {
+						clearInterval(this.vibeUpdateInterval);
+					}
+					this.vibeUpdateInterval = setInterval(() => {
+						const currentVibe = this.vibeService.getCurrentVibe();
+						const currentSummary = this.moodHistory.getSummary();
+						webviewView.webview.postMessage({
+							command: 'VIBE_UPDATE',
+							vibe: currentVibe,
+							sessionSummary: currentSummary
+						});
+					}, 3000);
+					break;
+				}
+				case 'SEND_TOAST': {
+					if (typeof message?.text !== 'string' || !this.petViewProvider.isReady()) {
+						return;
+					}
+					this.petViewProvider.setMood({
+						mood: (typeof message.mood === 'string' && isPetAction(message.mood)) ? message.mood as PetAction : 'idle',
+						message: message.text,
+						durationSeconds: typeof message.durationSeconds === 'number' ? message.durationSeconds : 3
+					});
+					break;
+				}
+				case 'SET_PERSONALITY': {
+					if (typeof message?.personality === 'string') {
+						vscode.workspace.getConfiguration('emotional-support').update('personality', message.personality, vscode.ConfigurationTarget.Global);
+					}
+					break;
+				}
+				case 'SET_VIBE_REACTIONS': {
+					if (typeof message?.enabled === 'boolean') {
+						vscode.workspace.getConfiguration('emotional-support').update('vibeReactions', message.enabled, vscode.ConfigurationTarget.Global);
+					}
+					break;
+				}
+				case 'SHOW_SESSION_SUMMARY': {
+					this.moodHistory.printSummary();
+					getOutputChannel().show(true);
 					break;
 				}
 				case 'FORCE_ACTION': {
@@ -652,6 +844,13 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 				}
 				default:
 					break;
+			}
+		});
+
+		webviewView.onDidDispose(() => {
+			if (this.vibeUpdateInterval) {
+				clearInterval(this.vibeUpdateInterval);
+				this.vibeUpdateInterval = undefined;
 			}
 		});
 	}

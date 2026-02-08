@@ -35,7 +35,10 @@ export type RobotActionName =
 	| 'lookaround'
 	| 'shrug'
 	| 'peek'
-	| 'knocked';
+	| 'knocked'
+	| 'tidyup'
+	| 'stroll'
+	| 'tripped';
 
 export type RobotActionContext = {
 	targets: RobotTargets;

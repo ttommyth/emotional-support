@@ -98,3 +98,108 @@
     .control-root { padding: 10px; }
     .grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
 }
+
+/* ── Vibe Monitor ─────────────────────────────────────── */
+
+.vibe-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.vibe-level {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.vibe-score {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.vibe-bar-container {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(128, 128, 128, 0.15);
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.vibe-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease-out, background 0.5s ease-out;
+}
+
+.vibe-details {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.vibe-detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.vibe-detail-row span:last-child {
+    font-variant-numeric: tabular-nums;
+}
+
+.warn-text {
+    color: var(--vscode-terminal-ansiRed, #f48771) !important;
+    font-weight: 600;
+}
+
+/* ── Session / Journey ────────────────────────────────── */
+
+.vibe-journey {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.journey-emojis {
+    font-size: 13px;
+    letter-spacing: 1px;
+}
+
+.subtle-inline {
+    font-family: monospace;
+    font-size: 10px;
+    letter-spacing: -0.5px;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* ── Toast input row ──────────────────────────────────── */
+
+.toast-input-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.toast-input {
+    flex: 1;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+}
+
+.toast-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+}
+
+.toast-input:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder);
+}

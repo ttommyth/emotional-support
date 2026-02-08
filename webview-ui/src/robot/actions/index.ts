@@ -25,6 +25,9 @@ import { thinking } from './thinking';
 import { walk } from './walk';
 import { wave } from './wave';
 import { peek } from './peek';
+import { tidyup } from './tidyup';
+import { stroll } from './stroll';
+import { tripped } from './tripped';
 
 /** All action definitions (may carry an optional `prop` field from defineAction) */
 type ActionWithProp = RobotActionDefinition & { prop?: PropDefinition };
@@ -54,7 +57,10 @@ const allActions: ActionWithProp[] = [
 	lookaround,
 	shrug,
 	knocked,
-	peek
+	peek,
+	tidyup,
+	stroll,
+	tripped
 ];
 
 /** Action map keyed by name — used by the animation loop */

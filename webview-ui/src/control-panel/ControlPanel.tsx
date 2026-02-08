@@ -2,11 +2,53 @@ import { useEffect, useMemo, useState } from 'react';
 
 declare const acquireVsCodeApi: (() => { postMessage: (message: unknown) => void }) | undefined;
 
-type ViewMessage = {
+// ─── Types ────────────────────────────────────────────────────────────────
+
+type VibeData = {
+	stressScore: number;
+	errorCount: number;
+	warningCount: number;
+	timeSinceLastSaveMs: number;
+	contextSwitchRate: number;
+	typingIntensity: number;
+	deletionSpike: boolean;
+	gitState: string;
+	summary: string;
+};
+
+type SessionSummary = {
+	sessionDurationMinutes: number;
+	averageStress: number;
+	peakStress: number;
+	timeInLevels: Record<string, number>;
+	peakErrors: number;
+	vibeJourney: string;
+};
+
+type InitMessage = {
 	command: 'INIT';
 	actions: string[];
 	autopilotEnabled: boolean;
+	vibe?: VibeData;
+	sessionSummary?: SessionSummary;
+	personality?: string;
+	vibeReactions?: boolean;
 };
+
+type VibeUpdateMessage = {
+	command: 'VIBE_UPDATE';
+	vibe: VibeData;
+	sessionSummary: SessionSummary;
+};
+
+type AutopilotUpdateMessage = {
+	command: 'AUTOPILOT_UPDATE';
+	enabled: boolean;
+};
+
+type ViewMessage = InitMessage | VibeUpdateMessage | AutopilotUpdateMessage;
+
+// ─── Constants ────────────────────────────────────────────────────────────
 
 const ACTION_DISPLAY: Record<string, string> = {
 	laydownflat: 'Lay Down Flat',
@@ -14,31 +56,10 @@ const ACTION_DISPLAY: Record<string, string> = {
 };
 
 const ACTION_ORDER = [
-	'idle',
-	'thinking',
-	'coding',
-	'debugging',
-	'reviewing',
-	'refactoring',
-	'testing',
-	'reading',
-	'success',
-	'error',
-	'sleep',
-	'sit',
-	'laydown',
-	'laydownflat',
-	'rest',
-	'running',
-	'ballet',
-	'walk',
-	'wave',
-	'stretch',
-	'dance',
-	'lookaround',
-	'shrug',
-	'peek',
-	'knocked'
+	'idle', 'thinking', 'coding', 'debugging', 'reviewing', 'refactoring',
+	'testing', 'reading', 'success', 'error', 'sleep', 'sit', 'laydown',
+	'laydownflat', 'rest', 'running', 'ballet', 'walk', 'wave', 'stretch',
+	'dance', 'lookaround', 'shrug', 'peek', 'knocked'
 ];
 
 const SCENE_PROP_PRESETS: Array<{ label: string; type: string; icon: string }> = [
@@ -57,7 +78,26 @@ const SCENE_PROP_PRESETS: Array<{ label: string; type: string; icon: string }> =
 
 const POSITIONS = ['far-left', 'left', 'center-left', 'center', 'center-right', 'right', 'far-right', 'back-left', 'back', 'back-right', 'front', 'front-left', 'front-right'];
 
+const PERSONALITIES = ['supportive', 'sarcastic', 'stoic'] as const;
+
+const PERSONALITY_ICONS: Record<string, string> = {
+	supportive: '🤗',
+	sarcastic: '😏',
+	stoic: '🗿'
+};
+
+const TOAST_PRESETS = [
+	{ label: '👋 Hi!', text: 'Hey there! Just checking in on you.', mood: 'wave' },
+	{ label: '🎉 Great job!', text: "You're doing amazing work today!", mood: 'success' },
+	{ label: '😰 Hang in there', text: "It's tough right now, but you'll figure it out.", mood: 'error' },
+	{ label: '💤 Take a break', text: 'Maybe step away for a minute? Self-care matters.', mood: 'sleep' },
+	{ label: '🤔 Thinking...', text: 'Hmm, let me think about this with you...', mood: 'thinking' },
+	{ label: '🐛 Bug found', text: "There's definitely a bug here. Let's hunt it down!", mood: 'debugging' }
+];
+
 const DEFAULT_ACTIONS: string[] = ACTION_ORDER;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
 const sortActions = (actions: string[]) => {
 	const unique = Array.from(new Set(actions));
@@ -78,6 +118,24 @@ const formatAction = (action: string) => {
 		.join(' ');
 };
 
+function vibeLevelFromScore(score: number): { label: string; emoji: string; color: string } {
+	if (score < 15) { return { label: 'Zen', emoji: '🟢', color: 'var(--vscode-terminal-ansiGreen, #6ccf9f)' }; }
+	if (score < 35) { return { label: 'Focused', emoji: '🔵', color: 'var(--vscode-terminal-ansiBlue, #6cb6ff)' }; }
+	if (score < 55) { return { label: 'Busy', emoji: '🟡', color: 'var(--vscode-terminal-ansiYellow, #e2c08d)' }; }
+	if (score < 75) { return { label: 'Stressed', emoji: '🟠', color: 'var(--vscode-terminal-ansiRed, #f48771)' }; }
+	return { label: 'Overwhelmed', emoji: '🔴', color: 'var(--vscode-terminal-ansiRed, #f48771)' };
+}
+
+function formatMs(ms: number): string {
+	const sec = Math.floor(ms / 1000);
+	if (sec < 60) { return `${sec}s`; }
+	const min = Math.floor(sec / 60);
+	if (min < 60) { return `${min}m`; }
+	return `${Math.floor(min / 60)}h ${min % 60}m`;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────
+
 export default function ControlPanel() {
 	const vscode = useMemo(
 		() => (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : { postMessage: () => undefined }),
@@ -86,11 +144,14 @@ export default function ControlPanel() {
 	const [autopilotEnabled, setAutopilotEnabled] = useState(true);
 	const [actions, setActions] = useState<string[]>(DEFAULT_ACTIONS);
 	const [status, setStatus] = useState<'loading' | 'ready'>('loading');
+	const [vibe, setVibe] = useState<VibeData | null>(null);
+	const [session, setSession] = useState<SessionSummary | null>(null);
+	const [personality, setPersonality] = useState('supportive');
+	const [vibeReactions, setVibeReactions] = useState(true);
+	const [customToast, setCustomToast] = useState('');
 
 	useEffect(() => {
-		const onMessage = (
-			event: MessageEvent<ViewMessage | { command: 'AUTOPILOT_UPDATE'; enabled: boolean }>
-		) => {
+		const onMessage = (event: MessageEvent<ViewMessage>) => {
 			const data = event.data;
 			if (!data || typeof data !== 'object') {
 				return;
@@ -98,7 +159,16 @@ export default function ControlPanel() {
 			if (data.command === 'INIT') {
 				setActions(sortActions(data.actions ?? []));
 				setAutopilotEnabled(data.autopilotEnabled ?? true);
+				if (data.vibe) { setVibe(data.vibe); }
+				if (data.sessionSummary) { setSession(data.sessionSummary); }
+				if (data.personality) { setPersonality(data.personality); }
+				if (data.vibeReactions !== undefined) { setVibeReactions(data.vibeReactions); }
 				setStatus('ready');
+				return;
+			}
+			if (data.command === 'VIBE_UPDATE') {
+				setVibe(data.vibe);
+				setSession(data.sessionSummary);
 				return;
 			}
 			if (data.command === 'AUTOPILOT_UPDATE') {
@@ -133,19 +203,187 @@ export default function ControlPanel() {
 		vscode.postMessage({ command: 'CLEAR_SCENE' });
 	};
 
+	const handleSendToast = (text: string, mood?: string) => {
+		if (!text.trim()) { return; }
+		vscode.postMessage({ command: 'SEND_TOAST', text: text.trim(), mood: mood ?? 'idle', durationSeconds: 4 });
+	};
+
+	const handlePersonalityChange = (p: string) => {
+		setPersonality(p);
+		vscode.postMessage({ command: 'SET_PERSONALITY', personality: p });
+	};
+
+	const handleVibeReactionsToggle = () => {
+		const next = !vibeReactions;
+		setVibeReactions(next);
+		vscode.postMessage({ command: 'SET_VIBE_REACTIONS', enabled: next });
+	};
+
+	const handleShowSummary = () => {
+		vscode.postMessage({ command: 'SHOW_SESSION_SUMMARY' });
+	};
+
+	const vibeInfo = vibe ? vibeLevelFromScore(vibe.stressScore) : null;
+
 	return (
 		<div className="control-root">
 			<header className="control-header">
 				<div>
 					<p className="eyebrow">Control Panel</p>
 					<h1>Robot Actions</h1>
-					<p className="subtle">Force actions, toggle autopilot, and trigger camera peeks.</p>
+					<p className="subtle">Force actions, toggle autopilot, debug vibes.</p>
 				</div>
 				<div className="status-chip" data-state={status}>
 					{status === 'ready' ? 'Connected' : 'Connecting'}
 				</div>
 			</header>
 
+		{/* ── Vibe Monitor ───────────────────────────────────────── */}
+		<section className="panel">
+			<h2>🧠 Workspace Vibe</h2>
+			{vibe && vibeInfo ? (
+				<>
+					<div className="vibe-header">
+						<span className="vibe-level" style={{ color: vibeInfo.color }}>
+							{vibeInfo.emoji} {vibeInfo.label}
+						</span>
+						<span className="vibe-score">Stress: {vibe.stressScore}/100</span>
+					</div>
+					<div className="vibe-bar-container">
+						<div className="vibe-bar" style={{ width: `${vibe.stressScore}%`, background: vibeInfo.color }} />
+					</div>
+					<div className="vibe-details">
+						<div className="vibe-detail-row">
+							<span>Errors</span>
+							<span className={vibe.errorCount > 0 ? 'warn-text' : ''}>{vibe.errorCount}</span>
+						</div>
+						<div className="vibe-detail-row">
+							<span>Warnings</span>
+							<span>{vibe.warningCount}</span>
+						</div>
+						<div className="vibe-detail-row">
+							<span>Last Save</span>
+							<span>{formatMs(vibe.timeSinceLastSaveMs)}</span>
+						</div>
+						<div className="vibe-detail-row">
+							<span>File Switches</span>
+							<span>{vibe.contextSwitchRate}/min</span>
+						</div>
+						<div className="vibe-detail-row">
+							<span>Git</span>
+							<span className={vibe.gitState === 'conflicted' ? 'warn-text' : ''}>{vibe.gitState}</span>
+						</div>
+						{vibe.deletionSpike && (
+							<div className="vibe-detail-row">
+								<span>⚠️ Deletion Spike</span>
+								<span className="warn-text">Detected</span>
+							</div>
+						)}
+					</div>
+					<p className="hint" style={{ marginTop: '6px' }}>{vibe.summary}</p>
+				</>
+			) : (
+				<p className="hint">Waiting for vibe data...</p>
+			)}
+		</section>
+
+		{/* ── Session Summary ─────────────────────────────────────── */}
+		{session && (
+			<section className="panel">
+				<h2>📊 Session ({session.sessionDurationMinutes}m)</h2>
+				<div className="vibe-details">
+					<div className="vibe-detail-row">
+						<span>Avg Stress</span>
+						<span>{session.averageStress}/100</span>
+					</div>
+					<div className="vibe-detail-row">
+						<span>Peak Stress</span>
+						<span>{session.peakStress}/100</span>
+					</div>
+					<div className="vibe-detail-row">
+						<span>Peak Errors</span>
+						<span>{session.peakErrors}</span>
+					</div>
+				</div>
+				{session.vibeJourney && (
+					<div className="vibe-journey">
+						<span className="hint">Journey: </span>
+						<span className="journey-emojis">{session.vibeJourney}</span>
+					</div>
+				)}
+				<div className="panel-row" style={{ marginTop: '8px' }}>
+					<button className="btn" type="button" onClick={handleShowSummary}>
+						📋 Full Summary
+					</button>
+				</div>
+			</section>
+		)}
+
+		{/* ── Personality & Reactions ────────────────────────────── */}
+		<section className="panel">
+			<h2>🎭 Personality &amp; Reactions</h2>
+			<div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+				{PERSONALITIES.map((p) => (
+					<button
+						key={p}
+						className={`btn${personality === p ? ' primary' : ''}`}
+						type="button"
+						onClick={() => handlePersonalityChange(p)}
+					>
+						{PERSONALITY_ICONS[p]} {titleCase(p)}
+					</button>
+				))}
+			</div>
+			<div className="panel-row" style={{ marginTop: '8px' }}>
+				<button
+					className={`btn${vibeReactions ? ' primary' : ''}`}
+					type="button"
+					onClick={handleVibeReactionsToggle}
+				>
+					Vibe Reactions: {vibeReactions ? 'On' : 'Off'}
+				</button>
+				<p className="hint">Auto-react to workspace stress.</p>
+			</div>
+		</section>
+
+		{/* ── Thought Bubble Tester ──────────────────────────────── */}
+		<section className="panel">
+			<h2>💬 Thought Bubble Tester</h2>
+			<p className="hint">Send a test toast to the robot.</p>
+			<div className="grid">
+				{TOAST_PRESETS.map((preset) => (
+					<button
+						key={preset.label}
+						className="btn"
+						type="button"
+						onClick={() => handleSendToast(preset.text, preset.mood)}
+						title={preset.text}
+					>
+						{preset.label}
+					</button>
+				))}
+			</div>
+			<div className="toast-input-row">
+				<input
+					className="toast-input"
+					type="text"
+					placeholder="Custom message..."
+					value={customToast}
+					onChange={(e) => setCustomToast(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === 'Enter') {
+							handleSendToast(customToast);
+							setCustomToast('');
+						}
+					}}
+				/>
+				<button className="btn primary" type="button" onClick={() => { handleSendToast(customToast); setCustomToast(''); }}>
+					Send
+				</button>
+			</div>
+		</section>
+
+		{/* ── Autopilot & Camera ─────────────────────────────────── */}
 		<section className="panel">
 			<div className="panel-row">
 				<button className="btn primary" type="button" onClick={handleAutopilotToggle}>
@@ -170,6 +408,7 @@ export default function ControlPanel() {
 			</div>
 		</section>
 
+		{/* ── Scene Props ─────────────────────────────────────────── */}
 		<section className="panel">
 			<h2>Scene Props</h2>
 			<p className="hint">Place props on the ground. Interactive props trigger robot pickup.</p>
@@ -199,6 +438,7 @@ export default function ControlPanel() {
 			</div>
 		</section>
 
+		{/* ── Actions ─────────────────────────────────────────────── */}
 		<section className="panel">
 			<h2>Available Actions</h2>
 			<div className="grid">

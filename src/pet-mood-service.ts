@@ -23,7 +23,10 @@ export const PET_ACTIONS = [
 	'lookaround',
 	'shrug',
 	'peek',
-	'knocked'
+	'knocked',
+	'tidyup',
+	'stroll',
+	'tripped'
 ] as const;
 
 export type PetAction = (typeof PET_ACTIONS)[number];

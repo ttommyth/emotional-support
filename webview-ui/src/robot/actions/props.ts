@@ -23,6 +23,8 @@ export type RobotProps = {
 	zParticles: Array<{ mesh: THREE.Sprite; offset: number }>;
 	/** Get a prop by action name */
 	get: (name: string) => import('./helpers').PropState | undefined;
+	/** Get all props currently sitting on the ground with their world positions */
+	getGroundProps: () => Array<{ name: string; x: number; z: number; timer: number }>;
 };
 
 export type CreatePropsInput = {
@@ -49,7 +51,21 @@ export function createRobotProps(
 	return {
 		items,
 		zParticles,
-		get: (name: string) => items.get(name)
+		get: (name: string) => items.get(name),
+		getGroundProps: () => {
+			const result: Array<{ name: string; x: number; z: number; timer: number }> = [];
+			for (const [name, prop] of items) {
+				if (prop.state === 'ground') {
+					result.push({
+						name,
+						x: prop.mesh.position.x,
+						z: prop.mesh.position.z,
+						timer: prop.groundTimer
+					});
+				}
+			}
+			return result;
+		}
 	};
 }
 
@@ -63,6 +79,7 @@ export function updateProps(delta: number, action: string, props: RobotProps) {
 
 		if (isHeld && prop.state !== 'dropping') {
 			prop.state = 'held';
+			prop.groundTimer = 0;
 		} else if (prop.state === 'held' && !isHeld) {
 			prop.state = 'dropping';
 			prop.vel.set((Math.random() - 0.5) * 2, 3, (Math.random() - 0.5) * 2 + 2);
@@ -89,9 +106,15 @@ export function updateProps(delta: number, action: string, props: RobotProps) {
 				prop.mesh.rotation.set(-Math.PI / 2, 0, Math.random() * Math.PI);
 			}
 		} else if (prop.state === 'ground') {
-			prop.mesh.scale.lerp(new THREE.Vector3(0, 0, 0), 0.05);
-			if (prop.mesh.scale.y < 0.05) {
-				prop.state = 'hidden';
+			prop.groundTimer += delta;
+			// Linger on the ground for a while before fading
+			const GROUND_LINGER_SECONDS = 20;
+			if (prop.groundTimer > GROUND_LINGER_SECONDS) {
+				prop.mesh.scale.lerp(new THREE.Vector3(0, 0, 0), 0.05);
+				if (prop.mesh.scale.y < 0.05) {
+					prop.state = 'hidden';
+					prop.groundTimer = 0;
+				}
 			}
 		}
 	}

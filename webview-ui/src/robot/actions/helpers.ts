@@ -23,6 +23,8 @@ export type PropState = {
 	anchor: THREE.Object3D;
 	state: 'hidden' | 'held' | 'dropping' | 'ground';
 	vel: THREE.Vector3;
+	/** Seconds the prop has been sitting on the ground */
+	groundTimer: number;
 };
 
 /**
@@ -80,7 +82,7 @@ export function createPropFromDefinition(
 	const mesh = def.buildMesh();
 	scene.add(mesh);
 
-	return { mesh, anchor, state: 'hidden', vel: new THREE.Vector3() };
+	return { mesh, anchor, state: 'hidden', vel: new THREE.Vector3(), groundTimer: 0 };
 }
 
 // ─── Action helpers ─────────────────────────────────────────────────────────

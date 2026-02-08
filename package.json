@@ -42,7 +42,7 @@
           "id": "emotional-support.controlView",
           "name": "Control Panel",
           "type": "webview",
-          "when": "emotional-support.isDev"
+          "when": "emotional-support.isDev || emotional-support.showControlPanel"
         }
       ]
     },
@@ -70,6 +70,14 @@
       {
         "command": "emotional-support.clearScene",
         "title": "Emotional Support: Clear Scene Props"
+      },
+      {
+        "command": "emotional-support.showSessionSummary",
+        "title": "Emotional Support: Show Session Mood Summary"
+      },
+      {
+        "command": "emotional-support.showVibeStatus",
+        "title": "Emotional Support: Show Current Vibe Status"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -179,6 +187,46 @@
           },
           "uniqueItems": true,
           "description": "List of actions to exclude from autopilot and unfocused behaviors. Core actions (idle, coding, etc.) cannot be disabled."
+        },
+        "emotional-support.vibeReactions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic robot reactions based on workspace signals (errors, save frequency, git status). The robot emotionally responds to your coding session."
+        },
+        "emotional-support.personality": {
+          "type": "string",
+          "default": "supportive",
+          "enum": ["supportive", "sarcastic", "stoic"],
+          "enumDescriptions": [
+            "Warm and encouraging — cheers you on and offers comfort during tough times",
+            "Witty and irreverent — roasts your bugs with love",
+            "Calm and factual — just the facts, minimal emotion"
+          ],
+          "description": "Robot personality that influences the tone of messages."
+        },
+        "emotional-support.highErrorThreshold": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Number of errors that represents 'maximum stress' for the stress score calculation."
+        },
+        "emotional-support.showThoughtBubbles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show floating thought bubbles above the robot with messages and reactions."
+        },
+        "emotional-support.showControlPanel": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the Control Panel view in the Emotional Support sidebar (for debugging and testing)."
+        },
+        "emotional-support.thoughtBubbleDuration": {
+          "type": "number",
+          "default": 8,
+          "minimum": 3,
+          "maximum": 30,
+          "description": "How long (in seconds) thought bubbles stay visible before fading."
         }
       }
     }
