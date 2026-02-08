@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry';
-import { defineAction } from './helpers';
+import { defineAction, temp } from './helpers';
 
 export const reviewing = defineAction({
 	name: 'reviewing',
 	tags: ['work'],
 	eyeColor: 'cyan',
-	apply: (t, { targets }) => {
+	apply: (t, ctx) => {
+		const { targets } = ctx;
+		const T = temp(ctx);
+
 		const phase = t % 5;
 
 		// Arms hold clipboard
@@ -18,28 +21,28 @@ export const reviewing = defineAction({
 			const p = phase / 2.5;
 			targets.head.rot.x = 0.1 + p * 0.1;
 			targets.head.rot.y = -0.2 + p * 0.4;
-			targets.body.rot.z = -0.02 + p * 0.04;
+			targets.body.rot.z = -0.02 + p * 0.04 * T;
 		} else if (phase < 3.5) {
 			// Considering — slight head tilt, eyebrow raise
 			const p = phase - 2.5;
-			targets.head.rot.x = 0.2 - Math.sin(p * Math.PI) * 0.08;
+			targets.head.rot.x = 0.2 - Math.sin(p * Math.PI) * 0.08 * T;
 			targets.head.rot.y = 0.2;
-			targets.head.rot.z = Math.sin(p * Math.PI) * 0.06;
+			targets.head.rot.z = Math.sin(p * Math.PI) * 0.06 * T;
 			targets.body.rot.z = 0.02;
 			// Right hand lifts slightly (marking/checking)
-			targets.rightArm.rot.x = -0.85 - Math.sin(p * Math.PI) * 0.15;
-			targets.rightArm.pos.y = 1.5 + Math.sin(p * Math.PI) * 0.08;
+			targets.rightArm.rot.x = -0.85 - Math.sin(p * Math.PI) * 0.15 * T;
+			targets.rightArm.pos.y = 1.5 + Math.sin(p * Math.PI) * 0.08 * T;
 		} else {
 			// Return sweep
 			const p = (phase - 3.5) / 1.5;
 			targets.head.rot.x = 0.2 - p * 0.1;
 			targets.head.rot.y = 0.2 - p * 0.4;
-			targets.body.rot.z = 0.02 - p * 0.04;
+			targets.body.rot.z = 0.02 - p * 0.04 * T;
 		}
 
 		// Breathing / gentle body movement
-		targets.body.pos.y = Math.sin(t * 1.2) * 0.04;
-		targets.body.rot.x = 0.03 + Math.sin(t * 0.9) * 0.02;
+		targets.body.pos.y = Math.sin(t * 1.2) * 0.04 * T;
+		targets.body.rot.x = 0.03 + Math.sin(t * 0.9) * 0.02 * T;
 	},
 	prop: {
 		anchor: { position: [0.2, 0.9, 3.2], rotation: [0.15, Math.PI, 0] },

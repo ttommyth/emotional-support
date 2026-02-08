@@ -11,6 +11,8 @@ export type RobotReaction = {
 	message: string;
 	/** How long the reaction should last (seconds). 0 = no forced duration */
 	durationSeconds: number;
+	/** Animation temperature 0–1. Controls intensity of movements. */
+	temperature: number;
 	/** Optional scene props to place */
 	sceneAction?: { type: 'place'; propType: string; autoInteract: boolean } | { type: 'clear' };
 };
@@ -135,6 +137,20 @@ const MESSAGE_BANKS: Record<Personality, Record<VibeLevel, string[]>> = {
 
 // ─── Mood mapping ─────────────────────────────────────────────────────────
 
+/**
+ * Map vibe level to animation temperature.
+ * zen = calm/slow, overwhelmed = hyper/frantic.
+ */
+function vibeTemperature(level: VibeLevel): number {
+	switch (level) {
+		case 'zen': return 0.2;
+		case 'focused': return 0.4;
+		case 'busy': return 0.6;
+		case 'stressed': return 0.8;
+		case 'overwhelmed': return 1.0;
+	}
+}
+
 function pickMood(vibe: WorkspaceVibe): PetAction {
 	const level = vibeLevel(vibe.stressScore);
 
@@ -221,6 +237,7 @@ export class MoodInterpreter {
 		const bank = MESSAGE_BANKS[this.personality][level];
 		const message = pickRandom(bank);
 		const duration = pickDuration(level);
+		const temperature = vibeTemperature(level);
 		const sceneAction = suggestScene(vibe);
 
 		// Avoid sending the same mood twice in a row
@@ -234,6 +251,7 @@ export class MoodInterpreter {
 			mood,
 			message,
 			durationSeconds: duration,
+			temperature,
 			sceneAction
 		};
 	}
@@ -266,7 +284,8 @@ export class MoodInterpreter {
 		return {
 			mood: level === 'overwhelmed' ? 'error' : level === 'stressed' ? 'thinking' : 'wave',
 			message: pickRandom(messages[this.personality]),
-			durationSeconds: 2
+			durationSeconds: 2,
+			temperature: vibeTemperature(level)
 		};
 	}
 
@@ -296,6 +315,7 @@ export class MoodInterpreter {
 			mood: 'success',
 			message: pickRandom(messages[this.personality]),
 			durationSeconds: 4,
+			temperature: 0.85,
 			sceneAction: Math.random() < 0.5
 				? { type: 'place', propType: 'star', autoInteract: false }
 				: undefined

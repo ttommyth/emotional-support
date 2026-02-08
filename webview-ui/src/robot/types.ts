@@ -46,6 +46,8 @@ export type RobotActionContext = {
 	headGroup: THREE.Object3D;
 	robot: THREE.Object3D;
 	camera: THREE.Camera;
+	/** Animation temperature 0–1. 0 = very calm/slow, 0.5 = normal, 1 = hyper/energetic */
+	temperature: number;
 };
 
 export type RobotActionTag =

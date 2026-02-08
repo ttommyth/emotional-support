@@ -202,7 +202,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// Check for milestone moments first
 		if (moodHistory.justClearedErrors()) {
 			const reaction = moodInterpreter.celebrate('All errors cleared!');
-			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds });
+			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds, temperature: reaction.temperature });
 			if (reaction.sceneAction?.type === 'place') {
 				petViewProvider.placeSceneProp({
 					propId: `vibe-${Date.now()}`,
@@ -215,7 +215,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		if (moodHistory.justRelieved()) {
 			const reaction = moodInterpreter.celebrate('Stress level dropped — you crushed it!');
-			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds });
+			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds, temperature: reaction.temperature });
 			return;
 		}
 
@@ -229,7 +229,8 @@ export function activate(context: vscode.ExtensionContext) {
 		petViewProvider.setMood({
 			mood: reaction.mood,
 			message: showMessage ? reaction.message : undefined,
-			durationSeconds: reaction.durationSeconds
+			durationSeconds: reaction.durationSeconds,
+			temperature: reaction.temperature
 		});
 
 		if (reaction.sceneAction?.type === 'place') {
@@ -551,6 +552,7 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 			reactToClicks: config.get<boolean>('reactToClicks', true),
 			animationSpeed: config.get<number>('animationSpeed', 1.0),
 			movementSpeed: config.get<number>('movementSpeed', 1.0),
+			defaultTemperature: config.get<number>('defaultTemperature', 0.5),
 			unfocusedSleepDelay: config.get<number>('unfocusedSleepDelay', 20),
 			disabledActions: config.get<string[]>('disabledActions', []),
 			showThoughtBubbles: config.get<boolean>('showThoughtBubbles', true),
@@ -607,10 +609,14 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		};
 	}
 
-	public setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number }) {
+	public setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number; temperature?: number }) {
 		this.state.currentMood = payload.mood;
 		this.view?.webview.postMessage({ command: 'SET_MOOD', ...payload });
 		this.onStateChange?.(this.getState());
+	}
+
+	public setTemperature(temperature: number) {
+		this.view?.webview.postMessage({ command: 'SET_TEMPERATURE', temperature });
 	}
 
 	public setAutopilot(enabled: boolean) {
@@ -731,7 +737,8 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						vibe,
 						sessionSummary: summary,
 						personality: config.get<string>('personality', 'supportive'),
-						vibeReactions: config.get<boolean>('vibeReactions', true)
+						vibeReactions: config.get<boolean>('vibeReactions', true),
+						defaultTemperature: config.get<number>('defaultTemperature', 0.5)
 					});
 					// Start periodic vibe updates
 					if (this.vibeUpdateInterval) {
@@ -788,6 +795,18 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						mood: message.action,
 						message: 'Forced action from control panel.'
 					});
+					break;
+				}
+				case 'SET_TEMPERATURE': {
+					if (typeof message?.temperature !== 'number') {
+						return;
+					}
+					if (!this.petViewProvider.isReady()) {
+						vscode.window.showInformationMessage('Open the Emotional Support view to control the robot.');
+						return;
+					}
+					const clamped = Math.max(0, Math.min(1, message.temperature));
+					this.petViewProvider.setTemperature(clamped);
 					break;
 				}
 				case 'SET_AUTOPILOT': {

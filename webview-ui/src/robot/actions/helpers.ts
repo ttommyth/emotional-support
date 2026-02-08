@@ -88,6 +88,42 @@ export function createPropFromDefinition(
 // ─── Action helpers ─────────────────────────────────────────────────────────
 
 /**
+ * Temperature utility — maps the 0–1 temperature into a usable multiplier.
+ *
+ * - `temp(ctx)` → amplitude multiplier (0.3 at temp=0, 1.0 at temp=0.5, 2.0 at temp=1)
+ * - `tempSpeed(ctx)` → time-speed multiplier (0.5 at temp=0, 1.0 at temp=0.5, 1.8 at temp=1)
+ * - `tempLerp(ctx, lo, hi)` → lerp between lo/hi based on temperature
+ *
+ * Actions use these to scale amplitudes and frequencies based on the workspace vibe
+ * or explicit MCP temperature setting. Default temperature is 0.5 (1.0× multiplier).
+ */
+
+/** Amplitude multiplier: 0.3× at temp=0 → 1.0× at temp=0.5 → 2.0× at temp=1 */
+export function temp(ctx: { temperature: number }): number {
+	const t = ctx.temperature;
+	if (t <= 0.5) {
+		// 0→0.5 maps to 0.3→1.0
+		return 0.3 + (t / 0.5) * 0.7;
+	}
+	// 0.5→1.0 maps to 1.0→2.0
+	return 1.0 + ((t - 0.5) / 0.5) * 1.0;
+}
+
+/** Speed multiplier: 0.5× at temp=0 → 1.0× at temp=0.5 → 1.8× at temp=1 */
+export function tempSpeed(ctx: { temperature: number }): number {
+	const t = ctx.temperature;
+	if (t <= 0.5) {
+		return 0.5 + (t / 0.5) * 0.5;
+	}
+	return 1.0 + ((t - 0.5) / 0.5) * 0.8;
+}
+
+/** Linear interpolation between lo and hi based on temperature (0→lo, 1→hi) */
+export function tempLerp(ctx: { temperature: number }, lo: number, hi: number): number {
+	return lo + ctx.temperature * (hi - lo);
+}
+
+/**
  * Full action configuration — the single object an AI needs to provide
  * to define a new robot action.
  */

@@ -203,3 +203,32 @@
     outline: none;
     border-color: var(--vscode-focusBorder);
 }
+
+/* ── Temperature ───────────────────────────────────────── */
+
+.temperature-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.temperature-slider {
+    flex: 1;
+    accent-color: var(--vscode-button-background);
+}
+
+.temperature-value {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 84px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.temperature-number {
+    font-variant-numeric: tabular-nums;
+    color: var(--vscode-foreground);
+    font-weight: 600;
+}

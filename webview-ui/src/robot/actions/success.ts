@@ -1,32 +1,35 @@
 import * as THREE from 'three';
-import { defineAction, ANCHOR_PRESETS } from './helpers';
+import { defineAction, ANCHOR_PRESETS, temp } from './helpers';
 
 export const success = defineAction({
 	name: 'success',
 	tags: ['work'],
 	eyeColor: 'green',
-	apply: (t, { targets }) => {
+	apply: (t, ctx) => {
+		const { targets } = ctx;
+		const T = temp(ctx);
+
 		// Rhythmic celebration bounces with arm pumps
 		const bounce = Math.abs(Math.sin(t * 3.5));
 		const pump = Math.sin(t * 3.5);
-		targets.body.pos.y = bounce * 0.6;
-		targets.body.rot.z = Math.sin(t * 1.8) * 0.08;
+		targets.body.pos.y = bounce * 0.6 * T;
+		targets.body.rot.z = Math.sin(t * 1.8) * 0.08 * T;
 
 		// Arms pump up on bounce, down on land
-		const armLift = pump > 0 ? pump : 0;
+		const armLift = pump > 0 ? pump * T : 0;
 		targets.leftArm.rot.set(-0.3 - armLift * 2.0, -0.2, -0.8 - armLift * 0.6);
 		targets.rightArm.rot.set(-0.3 - armLift * 2.0, 0.2, 0.8 + armLift * 0.6);
 		targets.leftArm.pos.y = 1.5 + armLift * 0.3;
 		targets.rightArm.pos.y = 1.5 + armLift * 0.3;
 
 		// Happy head bob
-		targets.head.rot.z = Math.sin(t * 3.5) * 0.12;
-		targets.head.rot.y = Math.sin(t * 1.4) * 0.15;
-		targets.head.rot.x = -0.1 + bounce * 0.05;
+		targets.head.rot.z = Math.sin(t * 3.5) * 0.12 * T;
+		targets.head.rot.y = Math.sin(t * 1.4) * 0.15 * T;
+		targets.head.rot.x = -0.1 + bounce * 0.05 * T;
 
 		// Little leg kicks on bounce
-		targets.leftLeg.rot.x = Math.max(0, pump) * 0.3;
-		targets.rightLeg.rot.x = Math.max(0, -pump) * 0.3;
+		targets.leftLeg.rot.x = Math.max(0, pump) * 0.3 * T;
+		targets.rightLeg.rot.x = Math.max(0, -pump) * 0.3 * T;
 	},
 	prop: {
 		anchor: { ...ANCHOR_PRESETS.aboveHead },

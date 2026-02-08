@@ -1,10 +1,14 @@
 import type { RobotActionDefinition } from '../types';
+import { temp } from './helpers';
 
 export const wave: RobotActionDefinition = {
 	name: 'wave',
 	tags: ['idleFiller'],
 	eyeColor: 'cyan',
-	apply: (t, { targets }) => {
+	apply: (t, ctx) => {
+		const { targets } = ctx;
+		const T = temp(ctx);
+
 		const phase = t % 4.0;
 
 		// Right arm: raise → wave back and forth → lower
@@ -18,9 +22,9 @@ export const wave: RobotActionDefinition = {
 			// Wave — big forearm swings
 			const p = phase - 0.7;
 			targets.rightArm.rot.set(
-				Math.sin(p * 7) * 0.35,
+				Math.sin(p * 7) * 0.35 * T,
 				0.2,
-				2.4 + Math.sin(p * 7) * 0.2
+				2.4 + Math.sin(p * 7) * 0.2 * T
 			);
 		} else {
 			// Lower arm
@@ -34,15 +38,15 @@ export const wave: RobotActionDefinition = {
 		}
 
 		// Left arm: gentle idle sway
-		targets.leftArm.rot.set(Math.sin(t * 1.2) * 0.08, -0.12, -0.2);
+		targets.leftArm.rot.set(Math.sin(t * 1.2) * 0.08 * T, -0.12, -0.2);
 
 		// Body leans toward waving side
-		targets.body.rot.z = phase < 3.0 ? -0.06 : -0.06 * (1 - (phase - 3.0));
-		targets.body.pos.y = Math.sin(t * 1.8) * 0.06;
+		targets.body.rot.z = phase < 3.0 ? -0.06 * T : -0.06 * T * (1 - (phase - 3.0));
+		targets.body.pos.y = Math.sin(t * 1.8) * 0.06 * T;
 
 		// Head: friendly tilt and nod
-		targets.head.rot.y = Math.sin(t * 1.4) * 0.12;
-		targets.head.rot.z = phase < 3.0 ? Math.sin(t * 2.5) * 0.1 : 0;
-		targets.head.rot.x = Math.sin(t * 1.8) * 0.06;
+		targets.head.rot.y = Math.sin(t * 1.4) * 0.12 * T;
+		targets.head.rot.z = phase < 3.0 ? Math.sin(t * 2.5) * 0.1 * T : 0;
+		targets.head.rot.x = Math.sin(t * 1.8) * 0.06 * T;
 	}
 };

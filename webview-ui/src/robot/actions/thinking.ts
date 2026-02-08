@@ -1,40 +1,43 @@
 import * as THREE from 'three';
-import { defineAction, ANCHOR_PRESETS } from './helpers';
+import { defineAction, ANCHOR_PRESETS, temp } from './helpers';
 
 export const thinking = defineAction({
 	name: 'thinking',
 	tags: ['work'],
 	eyeColor: 'cyan',
-	apply: (t, { targets }) => {
+	apply: (t, ctx) => {
+		const { targets } = ctx;
+		const T = temp(ctx);
+
 		// Contemplative sway — gentle weight shift
-		targets.body.pos.y = Math.sin(t * 1.2) * 0.05;
-		targets.body.rot.z = Math.sin(t * 0.8) * 0.03;
+		targets.body.pos.y = Math.sin(t * 1.2) * 0.05 * T;
+		targets.body.rot.z = Math.sin(t * 0.8) * 0.03 * T;
 
 		// Right hand to chin — classic thinker pose
 		targets.rightArm.rot.set(-1.8, -0.5, -0.3);
 		targets.rightArm.pos.set(2.2, 1.5, 0);
 
 		// Left arm relaxed, occasionally shifts
-		targets.leftArm.rot.set(-0.3 + Math.sin(t * 0.6) * 0.05, -0.15, -0.25);
+		targets.leftArm.rot.set(-0.3 + Math.sin(t * 0.6) * 0.05 * T, -0.15, -0.25);
 
 		// Head: slow contemplative look around, tilts while pondering
 		const phase = t % 7;
 		if (phase < 3) {
 			// Looking one direction, thinking
 			const p = phase / 3;
-			targets.head.rot.x = -0.1 + Math.sin(p * Math.PI) * 0.08;
-			targets.head.rot.y = 0.2 + Math.sin(p * Math.PI * 0.5) * 0.1;
-			targets.head.rot.z = Math.sin(p * Math.PI) * 0.05;
+			targets.head.rot.x = -0.1 + Math.sin(p * Math.PI) * 0.08 * T;
+			targets.head.rot.y = 0.2 + Math.sin(p * Math.PI * 0.5) * 0.1 * T;
+			targets.head.rot.z = Math.sin(p * Math.PI) * 0.05 * T;
 		} else if (phase < 5) {
 			// Slow shift to other side
 			const p = (phase - 3) / 2;
-			targets.head.rot.x = -0.1 + Math.sin(p * Math.PI) * 0.06;
+			targets.head.rot.x = -0.1 + Math.sin(p * Math.PI) * 0.06 * T;
 			targets.head.rot.y = 0.3 - p * 0.6;
-			targets.head.rot.z = -Math.sin(p * Math.PI) * 0.04;
+			targets.head.rot.z = -Math.sin(p * Math.PI) * 0.04 * T;
 		} else {
 			// Look up — eureka moment building
 			const p = (phase - 5) / 2;
-			targets.head.rot.x = -0.1 - p * 0.15;
+			targets.head.rot.x = -0.1 - p * 0.15 * T;
 			targets.head.rot.y = -0.3 + p * 0.3;
 		}
 	},

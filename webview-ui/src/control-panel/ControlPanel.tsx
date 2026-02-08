@@ -33,6 +33,7 @@ type InitMessage = {
 	sessionSummary?: SessionSummary;
 	personality?: string;
 	vibeReactions?: boolean;
+	defaultTemperature?: number;
 };
 
 type VibeUpdateMessage = {
@@ -118,6 +119,14 @@ const formatAction = (action: string) => {
 		.join(' ');
 };
 
+const formatTemperatureLabel = (value: number) => {
+	if (value < 0.2) { return 'Chill'; }
+	if (value < 0.45) { return 'Calm'; }
+	if (value < 0.7) { return 'Normal'; }
+	if (value < 0.9) { return 'Energetic'; }
+	return 'Hyper';
+};
+
 function vibeLevelFromScore(score: number): { label: string; emoji: string; color: string } {
 	if (score < 15) { return { label: 'Zen', emoji: '🟢', color: 'var(--vscode-terminal-ansiGreen, #6ccf9f)' }; }
 	if (score < 35) { return { label: 'Focused', emoji: '🔵', color: 'var(--vscode-terminal-ansiBlue, #6cb6ff)' }; }
@@ -149,6 +158,7 @@ export default function ControlPanel() {
 	const [personality, setPersonality] = useState('supportive');
 	const [vibeReactions, setVibeReactions] = useState(true);
 	const [customToast, setCustomToast] = useState('');
+	const [temperature, setTemperature] = useState(0.5);
 
 	useEffect(() => {
 		const onMessage = (event: MessageEvent<ViewMessage>) => {
@@ -163,6 +173,7 @@ export default function ControlPanel() {
 				if (data.sessionSummary) { setSession(data.sessionSummary); }
 				if (data.personality) { setPersonality(data.personality); }
 				if (data.vibeReactions !== undefined) { setVibeReactions(data.vibeReactions); }
+				if (typeof data.defaultTemperature === 'number') { setTemperature(data.defaultTemperature); }
 				setStatus('ready');
 				return;
 			}
@@ -217,6 +228,12 @@ export default function ControlPanel() {
 		const next = !vibeReactions;
 		setVibeReactions(next);
 		vscode.postMessage({ command: 'SET_VIBE_REACTIONS', enabled: next });
+	};
+
+	const handleTemperatureChange = (nextValue: number) => {
+		const clamped = Math.max(0, Math.min(1, nextValue));
+		setTemperature(clamped);
+		vscode.postMessage({ command: 'SET_TEMPERATURE', temperature: clamped });
 	};
 
 	const handleShowSummary = () => {
@@ -390,6 +407,26 @@ export default function ControlPanel() {
 					Autopilot: {autopilotEnabled ? 'On' : 'Off'}
 				</button>
 				<p className="hint">Autopilot only moves when the main view is visible.</p>
+			</div>
+		</section>
+
+		<section className="panel">
+			<h2>🔥 Temperature</h2>
+			<p className="hint">Control animation intensity (0 = calm, 1 = hyper).</p>
+			<div className="temperature-row">
+				<input
+					className="temperature-slider"
+					type="range"
+					min={0}
+					max={1}
+					step={0.05}
+					value={temperature}
+					onChange={(e) => handleTemperatureChange(Number(e.target.value))}
+				/>
+				<div className="temperature-value">
+					<span>{formatTemperatureLabel(temperature)}</span>
+					<span className="temperature-number">{temperature.toFixed(2)}</span>
+				</div>
 			</div>
 		</section>
 

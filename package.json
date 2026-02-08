@@ -155,6 +155,13 @@
           "maximum": 3.0,
           "description": "Speed multiplier for robot walking and running movement."
         },
+        "emotional-support.defaultTemperature": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Default animation temperature (0–1). Controls overall intensity of robot movements. 0 = very calm/minimal, 0.5 = normal, 1 = hyper/energetic. Workspace vibe and MCP commands can override this dynamically."
+        },
         "emotional-support.unfocusedSleepDelay": {
           "type": "number",
           "default": 20,

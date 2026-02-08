@@ -55,6 +55,8 @@ export type PetMoodPayload = {
 	mood: PetAction;
 	message?: string;
 	durationSeconds?: number;
+	/** Animation temperature 0–1. 0 = very calm, 0.5 = normal, 1 = hyper. Omit to keep current. */
+	temperature?: number;
 };
 
 export class PetMoodService {

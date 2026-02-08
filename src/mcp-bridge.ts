@@ -24,7 +24,7 @@ export type RobotControlCommand =
 	| {
 			id: string;
 			type: 'setMood';
-			payload: { mood: PetAction; message?: string; durationSeconds?: number };
+			payload: { mood: PetAction; message?: string; durationSeconds?: number; temperature?: number };
 			requestedAt: string;
 			source: 'mcp';
 	  }
@@ -72,7 +72,7 @@ export type RobotControlCommand =
 	  };
 
 export interface RobotControlTarget {
-	setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number }): void;
+	setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number; temperature?: number }): void;
 	setAutopilot(enabled: boolean): void;
 	forceMove(target: 'front' | 'left' | 'right'): void;
 	setScene(payload: { props: ScenePropCommandEntry[] }): void;

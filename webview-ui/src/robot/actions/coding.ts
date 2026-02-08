@@ -1,17 +1,20 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry';
-import { defineAction } from './helpers';
+import { defineAction, temp } from './helpers';
 
 export const coding = defineAction({
 	name: 'coding',
 	tags: ['work'],
 	eyeColor: 'cyan',
-	apply: (t, { targets }) => {
+	apply: (t, ctx) => {
+		const { targets } = ctx;
+		const T = temp(ctx);
+
 		// Typing rhythm — alternating hands with pauses
 		const cycle = t % 2.5;
 		const typing = cycle < 2.0; // type for 2s, brief pause 0.5s
-		const jL = typing ? Math.sin(t * 12) * 0.08 : 0;
-		const jR = typing ? Math.cos(t * 12 + 0.5) * 0.08 : 0;
+		const jL = typing ? Math.sin(t * 12) * 0.08 * T : 0;
+		const jR = typing ? Math.cos(t * 12 + 0.5) * 0.08 * T : 0;
 
 		targets.leftArm.rot.set(-1.4 + jL * 0.3, 0.1, 0.25);
 		targets.rightArm.rot.set(-1.4 + jR * 0.3, -0.1, -0.25);
@@ -19,13 +22,13 @@ export const coding = defineAction({
 		targets.rightArm.pos.y = 1.5 + jR;
 
 		// Lean in toward screen, slight sway
-		targets.body.pos.y = Math.sin(t * 1.5) * 0.04;
+		targets.body.pos.y = Math.sin(t * 1.5) * 0.04 * T;
 		targets.body.rot.x = 0.05;
-		targets.body.rot.z = Math.sin(t * 0.8) * 0.02;
+		targets.body.rot.z = Math.sin(t * 0.8) * 0.02 * T;
 
 		// Head tracks code — small vertical scanning + occasional side glance
-		targets.head.rot.x = 0.18 + Math.sin(t * 2) * 0.06;
-		targets.head.rot.y = Math.sin(t * 0.7) * 0.12;
+		targets.head.rot.x = 0.18 + Math.sin(t * 2) * 0.06 * T;
+		targets.head.rot.y = Math.sin(t * 0.7) * 0.12 * T;
 	},
 	prop: {
 		anchor: { position: [0, 0.5, 3.2], rotation: [-0.3, Math.PI, 0] },

@@ -128,6 +128,8 @@ export default function App() {
 		let movementSpeedMultiplier = 1.0;
 		let reactToClicks = true;
 		let disabledActions: Set<string> = new Set();
+		/** Animation temperature 0–1. 0 = calm, 0.5 = normal, 1 = hyper */
+		let currentTemperature = 0.5;
 
 		const robot = new Group();
 		robot.position.set(0, -0.6, 2.5);
@@ -989,7 +991,8 @@ export default function App() {
 			props,
 			headGroup,
 			robot,
-			camera
+			camera,
+			temperature: 0.5
 		};
 
 		const clock = new Clock();
@@ -1213,6 +1216,9 @@ export default function App() {
 				if (typeof message.movementSpeed === 'number') {
 					movementSpeedMultiplier = Math.max(0.2, Math.min(3.0, message.movementSpeed));
 				}
+				if (typeof message.defaultTemperature === 'number') {
+					currentTemperature = Math.max(0, Math.min(1, message.defaultTemperature));
+				}
 				if (typeof message.unfocusedSleepDelay === 'number') {
 					unfocusedSleepDelay = Math.max(5, Math.min(300, message.unfocusedSleepDelay));
 				}
@@ -1235,6 +1241,10 @@ export default function App() {
 				setRobotAction(message.mood);
 				if (typeof message.message === 'string' && message.message) {
 					addToast(message.message);
+				}
+				// Apply temperature if provided
+				if (typeof message.temperature === 'number') {
+					currentTemperature = Math.max(0, Math.min(1, message.temperature));
 				}
 				mcpRequestedAction = message.mood;
 				mcpOverrideActive = message.mood !== 'idle';
@@ -1271,6 +1281,10 @@ export default function App() {
 					aiState = 'IDLE';
 					aiTimer = 0;
 				}
+				return;
+			}
+			if (message?.command === 'SET_TEMPERATURE' && typeof message?.temperature === 'number') {
+				currentTemperature = Math.max(0, Math.min(1, message.temperature));
 				return;
 			}
 			if (message?.command === 'FORCE_MOVE' && typeof message?.target === 'string') {
@@ -1352,6 +1366,15 @@ export default function App() {
 			const delta = rawDelta * animationSpeedMultiplier;
 			const time = clock.getElapsedTime();
 
+			// ─── Temperature: update context and compute Tier-1 time warp ───
+			actionContext.temperature = currentTemperature;
+			// Tier 1: warp the time passed to actions based on temperature
+			// temp=0 → 0.5× speed, temp=0.5 → 1.0×, temp=1 → 1.8×
+			const tempSpeedMul = currentTemperature <= 0.5
+				? 0.5 + (currentTemperature / 0.5) * 0.5
+				: 1.0 + ((currentTemperature - 0.5) / 0.5) * 0.8;
+			const actionTime = time * tempSpeedMul;
+
 			updateAI(delta);
 			if (isUnfocused && !mcpOverrideActive && !robotActions[currentAction].tags?.includes('movement')) {
 				const isIdleish =
@@ -1388,14 +1411,14 @@ export default function App() {
 			const actionDef = robotActions[currentAction];
 			if (actionPhase === 'pre' && actionDef.pre) {
 				const progress = MathUtils.clamp(actionPhaseTimer / Math.max(actionDef.pre.duration, 0.001), 0, 1);
-				actionDef.pre.apply(progress, time, actionContext);
+				actionDef.pre.apply(progress, actionTime, actionContext);
 			} else if (actionPhase === 'post' && actionDef.post) {
 				const progress = MathUtils.clamp(actionPhaseTimer / Math.max(actionDef.post.duration, 0.001), 0, 1);
-				actionDef.post.apply(progress, time, actionContext);
+				actionDef.post.apply(progress, actionTime, actionContext);
 			} else {
-				actionDef.apply(time, actionContext);
+				actionDef.apply(actionTime, actionContext);
 			}
-			actionDef.update?.(delta, time, actionContext);
+			actionDef.update?.(delta, actionTime, actionContext);
 
 			// Run interaction AFTER action targets are set, so bending/grabbing/rising overrides them
 			updateInteraction(delta);

@@ -73,25 +73,27 @@ server.registerTool(
 			"Do NOT use this tool for navigation, toggling autopilot, or multi-step plans.\n" +
 			"If you want the robot to return to neutral, use `action: 'idle'`.\n" +
 			"Provide `durationSeconds` only as an estimated length for the expression; short, conservative values are preferred.\n" +
+			"Use `temperature` (0–1) to control animation intensity: 0 = very calm/slow, 0.5 = normal, 1 = hyper/energetic.\n" +
 			`Allowed emotions/actions: ${EMOTIONS}`,
 		inputSchema: {
 			action: z.enum(PET_ACTIONS).describe('Robot action to perform.'),
 			message: z.string().optional().describe('Optional message shown alongside the action.'),
-			durationSeconds: z.number().positive().optional().describe('Estimated duration for the action in seconds.')
+			durationSeconds: z.number().positive().optional().describe('Estimated duration for the action in seconds.'),
+			temperature: z.number().min(0).max(1).optional().describe('Animation temperature 0–1. 0 = very calm/slow, 0.5 = normal (default), 1 = hyper/energetic. Controls intensity of movements.')
 		}
 	},
-	async ({ action, message, durationSeconds }) => {
+	async ({ action, message, durationSeconds, temperature }) => {
 		const command: RobotControlCommand = {
 			id: randomUUID(),
 			type: 'setMood',
-			payload: { mood: action, message, durationSeconds },
+			payload: { mood: action, message, durationSeconds, temperature },
 			requestedAt: new Date().toISOString(),
 			source: 'mcp'
 		};
 		await writeCommand(command);
 		return {
-			content: [{ type: 'text', text: `Robot action set to ${action}.` }],
-			structuredContent: { commandId: command.id, action }
+			content: [{ type: 'text', text: `Robot action set to ${action}${temperature !== undefined ? ` (temperature: ${temperature})` : ''}.` }],
+			structuredContent: { commandId: command.id, action, temperature }
 		};
 	}
 );
