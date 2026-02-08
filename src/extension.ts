@@ -35,24 +35,30 @@ export function activate(context: vscode.ExtensionContext) {
 	let windowFocusTimer: NodeJS.Timeout | undefined;
 	let followUpTimer: NodeJS.Timeout | undefined; // For multi-step behaviors
 	let lastFocusLostTime: number | undefined;
-	let unfocusedBackoffDelayMs = 0;
-	let unfocusedBackoffStep = 0;
+	let unfocusedPhase = 0;
 	let lastUnfocusedAction: PetAction | undefined;
 	let lastAgentActivityTime: number | undefined;
-	const UNFOCUSED_BACKOFF_BASE_MS = 15000; // 15 seconds
-	const UNFOCUSED_BACKOFF_MULTIPLIER = 1.9;
-	const UNFOCUSED_BACKOFF_STEPS = 3;
+	let autopilotWasEnabled = true; // Track autopilot state before unfocused override
 	const FOCUS_REACTION_MIN_AWAY_MS = 30_000; // only react after 30s away
-	const UNFOCUSED_ACTIONS: PetAction[] = [
-		'lookaround',
-		'stretch',
-		'shrug',
-		'peek',
-		'walk',
-		'sit',
-		'rest',
-		'laydownflat',
-		'ballet'
+
+	// ─── Progressive Wind-Down Phases ───────────────────────────────────
+	// Each phase has a pool of actions, duration range, and delay before
+	// the next phase fires. The robot gracefully transitions:
+	//   noticing → settling → resting → drowsy → sleep
+	const UNFOCUSED_PHASES: {
+		actions: PetAction[];
+		durationRange: [number, number]; // [min, max] seconds the action plays
+		delayMs: number;                 // pause before this phase fires
+	}[] = [
+		// Phase 0 — Noticing: curious, alert reactions
+		{ actions: ['lookaround', 'peek', 'stretch', 'shrug'], durationRange: [4, 6], delayMs: 12_000 },
+		// Phase 1 — Settling: calmer activities
+		{ actions: ['walk', 'sit', 'ballet', 'stretch'], durationRange: [5, 8], delayMs: 18_000 },
+		// Phase 2 — Resting: winding down
+		{ actions: ['sit', 'rest', 'laydownflat'], durationRange: [8, 14], delayMs: 25_000 },
+		// Phase 3 — Drowsy: nearly asleep
+		{ actions: ['rest', 'laydownflat'], durationRange: [12, 20], delayMs: 35_000 },
+		// Phase 4+ — Sleep (handled as terminal state)
 	];
 
 	const clearAllTimers = () => {
@@ -67,64 +73,74 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 
 	const startUnfocusedBehaviorCycle = (reason: string) => {
-		unfocusedBackoffDelayMs = UNFOCUSED_BACKOFF_BASE_MS;
-		unfocusedBackoffStep = 0;
+		unfocusedPhase = 0;
 		lastUnfocusedAction = undefined;
 		clearAllTimers();
 
-		const scheduleNextBehavior = (delay: number) => {
+		// Only capture autopilot state on the FIRST call — subsequent calls
+		// (e.g. agent-activity while already unfocused) must not re-capture
+		// since autopilot is already disabled at that point.
+		const isFirstCall = petViewProvider.getState().autopilotEnabled;
+		if (isFirstCall) {
+			autopilotWasEnabled = true;
+			petViewProvider.setAutopilot(false);
+		}
+
+		const scheduleNextPhase = () => {
+			if (unfocusedPhase >= UNFOCUSED_PHASES.length) {
+				// Terminal state: sleep until focus returns
+				petViewProvider.setMood({
+					mood: 'sleep',
+					message: 'Window inactive — sleeping'
+				});
+				getOutputChannel().appendLine(`[WindowMonitor] Entered sleep (final phase) at ${new Date().toISOString()}`);
+				return;
+			}
+
+			const phase = UNFOCUSED_PHASES[unfocusedPhase];
+			const jitter = 0.15;
+			const jitteredDelay = phase.delayMs * (1 + (Math.random() * 2 - 1) * jitter);
+
 			windowFocusTimer = setTimeout(() => {
 				if (!vscode.window.state.focused && petViewProvider.isReady()) {
-					if (!lastFocusLostTime) {
-						// Safety check - shouldn't happen but handle gracefully
-						return;
-					}
-
-					if (unfocusedBackoffStep >= UNFOCUSED_BACKOFF_STEPS) {
-						// Final stage: sleep until focus returns
-						petViewProvider.setMood({
-							mood: 'sleep',
-							message: 'Window inactive - sleeping'
-						});
-						return;
-					}
+					if (!lastFocusLostTime) { return; }
 
 					const disabledActions = petViewProvider.getConfig().disabledActions;
-					const enabledActions = UNFOCUSED_ACTIONS.filter(
+					const enabledActions = phase.actions.filter(
 						(action) => !disabledActions.includes(action)
 					);
+
 					if (enabledActions.length === 0) {
-						// All unfocused actions disabled — sleep immediately
-						petViewProvider.setMood({
-							mood: 'sleep',
-							message: 'Window inactive - sleeping'
-						});
+						// No actions available in this phase — skip to next
+						unfocusedPhase += 1;
+						scheduleNextPhase();
 						return;
 					}
-					const nextActionOptions = enabledActions.filter(
-						(action) => action !== lastUnfocusedAction
-					);
-					const pool = nextActionOptions.length > 0 ? nextActionOptions : enabledActions;
+
+					// Pick a random action, avoiding repeats
+					const candidates = enabledActions.filter(a => a !== lastUnfocusedAction);
+					const pool = candidates.length > 0 ? candidates : enabledActions;
 					const nextAction = pool[Math.floor(Math.random() * pool.length)];
 					lastUnfocusedAction = nextAction;
-					const durationSeconds = nextAction === 'walk' ? 3 : nextAction === 'peek' ? 1.5 : 2.2;
+
+					const [minDur, maxDur] = phase.durationRange;
+					const durationSeconds = minDur + Math.random() * (maxDur - minDur);
+
 					petViewProvider.setMood({
 						mood: nextAction,
-						message: 'Window inactive - taking a break',
+						message: 'Window inactive — winding down',
 						durationSeconds
 					});
 
-					unfocusedBackoffStep += 1;
-					unfocusedBackoffDelayMs *= UNFOCUSED_BACKOFF_MULTIPLIER;
-					const jitter = 0.15;
-					const jitteredDelay = unfocusedBackoffDelayMs * (1 + (Math.random() * 2 - 1) * jitter);
-					scheduleNextBehavior(Math.max(2000, jitteredDelay));
+					getOutputChannel().appendLine(`[WindowMonitor] Phase ${unfocusedPhase}: ${nextAction} for ${durationSeconds.toFixed(1)}s`);
+					unfocusedPhase += 1;
+					scheduleNextPhase();
 				}
-			}, delay);
+			}, jitteredDelay);
 		};
 
-		scheduleNextBehavior(unfocusedBackoffDelayMs);
-		getOutputChannel().appendLine(`[WindowMonitor] Unfocused behavior cycle restarted (${reason}) at ${new Date().toISOString()}`);
+		scheduleNextPhase();
+		getOutputChannel().appendLine(`[WindowMonitor] Wind-down cycle started (${reason}) at ${new Date().toISOString()}`);
 	};
 
 	const handleWindowStateChange = (state: vscode.WindowState) => {
@@ -149,9 +165,12 @@ export function activate(context: vscode.ExtensionContext) {
 				const inactiveTimeMs = Date.now() - lastFocusLostTime;
 				const inactiveTimeMin = Math.floor(inactiveTimeMs / 60000);
 				getOutputChannel().appendLine(`[WindowMonitor] Window regained focus after ${inactiveTimeMin} minutes inactive`);
+
+				// Restore autopilot state that was disabled during wind-down
+				petViewProvider.setAutopilot(autopilotWasEnabled);
+
 				// Only show welcome-back if away long enough to matter
 				if (petViewProvider.isReady() && inactiveTimeMs >= FOCUS_REACTION_MIN_AWAY_MS) {
-					petViewProvider.setAutopilot(true);
 					// Use the mood interpreter for a personalized welcome back
 					const currentVibe = vibeService.getCurrentVibe();
 					const welcomeReaction = moodInterpreter.welcomeBack(currentVibe);

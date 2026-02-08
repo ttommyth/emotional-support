@@ -456,6 +456,9 @@ export default function App() {
 				mcpOverrideActive = false;
 				mcpRequestedAction = 'idle';
 				setRobotAction('idle');
+				// Give autopilot a cooldown so it doesn't immediately pick a new action
+				aiState = 'IDLE';
+				aiTimer = 2 + Math.random() * 2;
 			}
 				}
 			if (!(robotActions[currentAction].tags?.includes('movement') ?? false) || aiState !== 'MOVING') {
