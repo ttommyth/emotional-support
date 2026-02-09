@@ -90,8 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
 			if (unfocusedPhase >= UNFOCUSED_PHASES.length) {
 				// Terminal state: sleep until focus returns
 				petViewProvider.setMood({
-					mood: 'sleep',
-					message: 'Window inactive — sleeping'
+					mood: 'sleep'
 				});
 				getOutputChannel().appendLine(`[WindowMonitor] Entered sleep (final phase) at ${new Date().toISOString()}`);
 				return;
@@ -128,7 +127,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 					petViewProvider.setMood({
 						mood: nextAction,
-						message: 'Window inactive — winding down',
 						durationSeconds
 					});
 
@@ -176,7 +174,6 @@ export function activate(context: vscode.ExtensionContext) {
 					const welcomeReaction = moodInterpreter.welcomeBack(currentVibe);
 					petViewProvider.setMood({
 						mood: welcomeReaction.mood,
-						message: welcomeReaction.message,
 						durationSeconds: welcomeReaction.durationSeconds
 					});
 					if (Math.random() < 0.3) {
@@ -202,7 +199,8 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			getOutputChannel().appendLine(`[WindowMonitor] Agent activity detected while unfocused at ${new Date().toISOString()}`);
 		}
-		petViewProvider.setMood(payload);
+		const { message: _message, ...rest } = payload;
+		petViewProvider.setMood(rest);
 	});
 
 	// ─── Workspace Vibe System ────────────────────────────────────────────
@@ -221,7 +219,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// Check for milestone moments first
 		if (moodHistory.justClearedErrors()) {
 			const reaction = moodInterpreter.celebrate('All errors cleared!');
-			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds, temperature: reaction.temperature });
+			petViewProvider.setMood({ mood: reaction.mood, durationSeconds: reaction.durationSeconds, temperature: reaction.temperature });
 			if (reaction.sceneAction?.type === 'place') {
 				petViewProvider.placeSceneProp({
 					propId: `vibe-${Date.now()}`,
@@ -234,7 +232,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		if (moodHistory.justRelieved()) {
 			const reaction = moodInterpreter.celebrate('Stress level dropped — you crushed it!');
-			petViewProvider.setMood({ mood: reaction.mood, message: reaction.message, durationSeconds: reaction.durationSeconds, temperature: reaction.temperature });
+			petViewProvider.setMood({ mood: reaction.mood, durationSeconds: reaction.durationSeconds, temperature: reaction.temperature });
 			return;
 		}
 
@@ -243,11 +241,8 @@ export function activate(context: vscode.ExtensionContext) {
 		const reaction = moodInterpreter.interpret(vibe);
 		if (!reaction) {return;}
 
-		// 20% chance to actually show a message, otherwise silent pose change
-		const showMessage = Math.random() < 0.2;
 		petViewProvider.setMood({
 			mood: reaction.mood,
-			message: showMessage ? reaction.message : undefined,
 			durationSeconds: reaction.durationSeconds,
 			temperature: reaction.temperature
 		});
@@ -373,7 +368,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const currentMood = petViewProvider.getCurrentMood() ?? 'idle';
 			const nextIndex = (PET_ACTIONS.indexOf(currentMood) + 1) % PET_ACTIONS.length;
 			const nextMood = PET_ACTIONS[nextIndex];
-			petViewProvider.setMood({ mood: nextMood, message: 'Demo mood update.' });
+			petViewProvider.setMood({ mood: nextMood });
 		})
 	);
 
@@ -595,13 +590,13 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 			switch (message?.command) {
 				case 'READY': {
 					this.sendConfig();
-					this.setMood({ mood: 'idle', message: 'Ready to swim.' });
+					this.setMood({ mood: 'idle' });
 					this.setAutopilot(this.state.autopilotEnabled);
 					break;
 				}
 				case 'SET_MOOD': {
 					if (typeof message?.mood === 'string' && isPetAction(message.mood)) {
-						this.setMood({ mood: message.mood, message: message.message });
+						this.setMood({ mood: message.mood });
 					}
 					break;
 				}
@@ -780,7 +775,6 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 					}
 					this.petViewProvider.setMood({
 						mood: (typeof message.mood === 'string' && isPetAction(message.mood)) ? message.mood as PetAction : 'idle',
-						message: message.text,
 						durationSeconds: typeof message.durationSeconds === 'number' ? message.durationSeconds : 3
 					});
 					break;
@@ -811,8 +805,7 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						return;
 					}
 					this.petViewProvider.setMood({
-						mood: message.action,
-						message: 'Forced action from control panel.'
+						mood: message.action
 					});
 					break;
 				}
