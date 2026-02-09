@@ -3,10 +3,15 @@ import { defineConfig } from 'vite';
 
 // For GitHub Pages, use the repository name from the environment or default to the repo name
 const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1] || 'emotional-support';
+const isGitHubPages = process.env.GITHUB_PAGES === 'true';
 
 export default defineConfig({
 	plugins: [react()],
-	base: process.env.GITHUB_PAGES ? `/${repoName}/` : './',
+	base: isGitHubPages ? `/${repoName}/` : './',
+	define: {
+		// Expose GITHUB_PAGES flag to the client code at build time
+		__GITHUB_PAGES__: JSON.stringify(isGitHubPages)
+	},
 	build: {
 		rollupOptions: {
 			input: {
