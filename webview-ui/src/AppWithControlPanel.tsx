@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import App from './App';
 import ControlPanel from './control-panel/ControlPanel';
 import './control-panel/control-panel.css';
@@ -15,18 +16,14 @@ export default function AppWithControlPanel() {
 	const [isPanelVisible, setIsPanelVisible] = useState(true);
 
 	return (
-		<div style={{
-			display: 'flex',
-			width: '100%',
-			height: '100%',
-			overflow: 'hidden'
-		}}>
+		<div
+			className="app-shell"
+			data-panel-visible={isPanelVisible ? 'true' : 'false'}
+			style={{ '--panel-width': `${CONTROL_PANEL_WIDTH_PERCENT}%` } as CSSProperties}
+		>
 			{/* Main robot view */}
-			<div style={{
-				flex: isPanelVisible ? `1 1 ${ROBOT_VIEW_WIDTH_PERCENT}%` : '1 1 100%',
-				height: '100%',
-				position: 'relative',
-				transition: 'flex 0.3s ease-in-out'
+			<div className="app-shell__robot" style={{
+				flex: isPanelVisible ? `1 1 ${ROBOT_VIEW_WIDTH_PERCENT}%` : '1 1 100%'
 			}}>
 				<App />
 			</div>
@@ -34,41 +31,28 @@ export default function AppWithControlPanel() {
 			{/* Control panel toggle button */}
 			<button
 				onClick={() => setIsPanelVisible(!isPanelVisible)}
+				className="app-shell__toggle"
 				style={{
-					position: 'absolute',
-					top: '10px',
-					right: isPanelVisible ? `${CONTROL_PANEL_WIDTH_PERCENT}%` : '10px',
-					zIndex: 1000,
-					padding: '8px 12px',
-					background: 'var(--vscode-button-background)',
-					color: 'var(--vscode-button-foreground)',
-					border: 'none',
-					borderRadius: '4px',
-					cursor: 'pointer',
-					fontSize: '12px',
-					fontWeight: '600',
-					transition: 'right 0.3s ease-in-out',
-					boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-				}}
+					'--toggle-right': isPanelVisible ? `${CONTROL_PANEL_WIDTH_PERCENT}%` : '10px'
+				} as CSSProperties}
+				aria-expanded={isPanelVisible}
 				title={isPanelVisible ? 'Hide Control Panel' : 'Show Control Panel'}
 			>
 				{isPanelVisible ? '◀ Hide Controls' : '▶ Show Controls'}
 			</button>
 
+			<div
+				className="app-shell__scrim"
+				onClick={() => setIsPanelVisible(false)}
+				aria-hidden="true"
+			/>
+
 			{/* Control panel */}
-			{isPanelVisible && (
-				<div style={{
-					flex: `0 0 ${CONTROL_PANEL_WIDTH_PERCENT}%`,
-					height: '100%',
-					overflowY: 'auto',
-					overflowX: 'hidden',
-					borderLeft: '1px solid var(--vscode-panel-border, rgba(128,128,128,0.2))',
-					background: 'var(--vscode-sideBar-background)',
-					transition: 'flex 0.3s ease-in-out'
-				}}>
-					<ControlPanel />
-				</div>
-			)}
+			<div className="app-shell__panel" style={{
+				flex: `0 0 ${CONTROL_PANEL_WIDTH_PERCENT}%`
+			}}>
+				<ControlPanel />
+			</div>
 		</div>
 	);
 }

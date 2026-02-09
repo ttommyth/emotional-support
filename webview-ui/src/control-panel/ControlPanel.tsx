@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 declare const acquireVsCodeApi: (() => { postMessage: (message: unknown) => void }) | undefined;
 
@@ -146,9 +146,10 @@ function formatMs(ms: number): string {
 // ─── Component ────────────────────────────────────────────────────────────
 
 export default function ControlPanel() {
+	const isVsCode = typeof acquireVsCodeApi === 'function';
 	const vscode = useMemo(
-		() => (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : { postMessage: () => undefined }),
-		[]
+		() => (isVsCode && acquireVsCodeApi ? acquireVsCodeApi() : null),
+		[isVsCode]
 	);
 	const [autopilotEnabled, setAutopilotEnabled] = useState(true);
 	const [actions, setActions] = useState<string[]>(DEFAULT_ACTIONS);
@@ -159,6 +160,15 @@ export default function ControlPanel() {
 	const [vibeReactions, setVibeReactions] = useState(true);
 	const [customToast, setCustomToast] = useState('');
 	const [temperature, setTemperature] = useState(0.5);
+	const localPropSeqRef = useRef(0);
+
+	const postMessage = (message: unknown) => {
+		if (isVsCode && vscode) {
+			vscode.postMessage(message);
+			return;
+		}
+		window.postMessage(message, '*');
+	};
 
 	useEffect(() => {
 		const onMessage = (event: MessageEvent<ViewMessage>) => {
@@ -187,57 +197,91 @@ export default function ControlPanel() {
 			}
 		};
 		window.addEventListener('message', onMessage);
-		vscode.postMessage({ command: 'READY' });
+		if (isVsCode && vscode) {
+			vscode.postMessage({ command: 'READY' });
+		} else {
+			setStatus('ready');
+		}
 		return () => window.removeEventListener('message', onMessage);
-	}, [vscode]);
+	}, [isVsCode, vscode]);
 
 	const handleAutopilotToggle = () => {
 		const nextValue = !autopilotEnabled;
 		setAutopilotEnabled(nextValue);
-		vscode.postMessage({ command: 'SET_AUTOPILOT', enabled: nextValue });
+		postMessage({ command: 'SET_AUTOPILOT', enabled: nextValue });
 	};
 
 	const handleActionClick = (action: string) => {
-		vscode.postMessage({ command: 'FORCE_ACTION', action });
+		if (isVsCode) {
+			postMessage({ command: 'FORCE_ACTION', action });
+		} else {
+			postMessage({ command: 'SET_MOOD', mood: action });
+		}
 	};
 
 	const handleMoveClick = (target: 'left' | 'front' | 'right') => {
-		vscode.postMessage({ command: 'FORCE_MOVE', target });
+		postMessage({ command: 'FORCE_MOVE', target });
 	};
 
 	const handlePlaceProp = (type: string, autoInteract: boolean) => {
 		const position = POSITIONS[Math.floor(Math.random() * POSITIONS.length)];
-		vscode.postMessage({ command: 'PLACE_SCENE_PROP', propType: type, position, autoInteract });
+		if (isVsCode) {
+			postMessage({ command: 'PLACE_SCENE_PROP', propType: type, position, autoInteract });
+			return;
+		}
+		localPropSeqRef.current += 1;
+		postMessage({
+			command: 'PLACE_SCENE_PROP',
+			propId: `local-${localPropSeqRef.current}`,
+			propType: type,
+			position,
+			autoInteract
+		});
 	};
 
 	const handleClearScene = () => {
-		vscode.postMessage({ command: 'CLEAR_SCENE' });
+		if (isVsCode) {
+			postMessage({ command: 'CLEAR_SCENE' });
+			return;
+		}
+		postMessage({ command: 'SET_SCENE', props: [] });
 	};
 
 	const handleSendToast = (text: string, mood?: string) => {
 		if (!text.trim()) { return; }
-		vscode.postMessage({ command: 'SEND_TOAST', text: text.trim(), mood: mood ?? 'idle', durationSeconds: 4 });
+		const trimmed = text.trim();
+		if (isVsCode) {
+			postMessage({ command: 'SEND_TOAST', text: trimmed, mood: mood ?? 'idle', durationSeconds: 4 });
+			return;
+		}
+		postMessage({ command: 'SET_MOOD', mood: mood ?? 'idle', message: trimmed, durationSeconds: 4 });
 	};
 
 	const handlePersonalityChange = (p: string) => {
 		setPersonality(p);
-		vscode.postMessage({ command: 'SET_PERSONALITY', personality: p });
+		if (isVsCode) {
+			postMessage({ command: 'SET_PERSONALITY', personality: p });
+		}
 	};
 
 	const handleVibeReactionsToggle = () => {
 		const next = !vibeReactions;
 		setVibeReactions(next);
-		vscode.postMessage({ command: 'SET_VIBE_REACTIONS', enabled: next });
+		if (isVsCode) {
+			postMessage({ command: 'SET_VIBE_REACTIONS', enabled: next });
+		}
 	};
 
 	const handleTemperatureChange = (nextValue: number) => {
 		const clamped = Math.max(0, Math.min(1, nextValue));
 		setTemperature(clamped);
-		vscode.postMessage({ command: 'SET_TEMPERATURE', temperature: clamped });
+		postMessage({ command: 'SET_TEMPERATURE', temperature: clamped });
 	};
 
 	const handleShowSummary = () => {
-		vscode.postMessage({ command: 'SHOW_SESSION_SUMMARY' });
+		if (isVsCode) {
+			postMessage({ command: 'SHOW_SESSION_SUMMARY' });
+		}
 	};
 
 	const vibeInfo = vibe ? vibeLevelFromScore(vibe.stressScore) : null;
