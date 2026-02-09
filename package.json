@@ -7,7 +7,7 @@
     "url": "https://github.com/ttommyth/emotional-support.git"
   },
   "publisher": "problemsofa",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.105.0"
   },
