@@ -10,6 +10,7 @@ export default defineConfig({
 	base: isGitHubPages ? `/${repoName}/` : './',
 	define: {
 		// Expose GITHUB_PAGES flag to the client code at build time
+		// For dev mode, this will be false, and we use import.meta.env.VITE_GITHUB_PAGES instead
 		__GITHUB_PAGES__: JSON.stringify(isGitHubPages)
 	},
 	build: {
