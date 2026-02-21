@@ -1,5 +1,5 @@
 /**
- * Scene Props — 3D objects placed on the ground independently of the robot.
+ * Scene Props ??3D objects placed on the ground independently of the robot.
  *
  * Unlike action props (anchored to the robot body during specific actions),
  * scene props exist at world positions and can be placed/removed dynamically
@@ -13,7 +13,7 @@ import type { ScenePropType, ScenePropPlacement } from './types';
 import { GROUND_Y } from './types';
 import { actionPropDefs } from './actions';
 
-// ─── Mesh Builders ──────────────────────────────────────────────────────────
+// ?�?�?� Mesh Builders ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
 
 /**
  * Maps scene prop types to action names whose buildMesh can be reused.
@@ -227,7 +227,7 @@ export function buildScenePropMesh(type: ScenePropType): THREE.Object3D {
 	);
 }
 
-// ─── Scene Props Manager ────────────────────────────────────────────────────
+// ?�?�?� Scene Props Manager ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
 
 export type ScenePropsManager = {
 	props: Map<string, ScenePropPlacement>;
@@ -237,7 +237,7 @@ export type ScenePropsManager = {
 	update(delta: number): void;
 	clear(): void;
 	/** Return a serializable snapshot of all placed props for state reporting */
-	getSnapshot(): Array<{ id: string; type: ScenePropType; state: string; worldX: number; worldZ: number }>;
+	getSnapshot(): Array<{ id: string; type: ScenePropType; state: string; worldX: number; worldZ: number; timer: number }>;
 };
 
 /** Overshoot ease for a "pop" spawn effect */
@@ -250,6 +250,9 @@ export function createScenePropsManager(scene: THREE.Scene): ScenePropsManager {
 	const props = new Map<string, ScenePropPlacement>();
 	let elapsedTime = 0;
 	const glowColor = new THREE.Color(0x88ccff);
+
+	// how long before an idle scene prop should be considered stale and removed
+	const SCENE_PROP_LIFETIME_SECONDS = 60;
 
 	return {
 		props,
@@ -264,11 +267,12 @@ export function createScenePropsManager(scene: THREE.Scene): ScenePropsManager {
 
 			const mesh = buildScenePropMesh(type);
 			mesh.position.set(worldX, GROUND_Y, worldZ);
-			mesh.rotation.set(-Math.PI / 2, 0, Math.random() * 0.4 - 0.2);
-			mesh.scale.set(0, 0, 0);
-			mesh.visible = true;
-			scene.add(mesh);
-
+			// assign a full-circle random yaw and remember it
+		const yaw = Math.random() * Math.PI * 2 - Math.PI;
+		mesh.rotation.set(-Math.PI / 2, 0, yaw);
+		mesh.scale.set(0, 0, 0);
+		mesh.visible = true;
+		scene.add(mesh);
 			const placement: ScenePropPlacement = {
 				id,
 				type,
@@ -277,8 +281,11 @@ export function createScenePropsManager(scene: THREE.Scene): ScenePropsManager {
 				state: 'spawning',
 				worldX,
 				worldZ,
+
+				initialRotZ: yaw,
 				spawnProgress: 0,
 				despawnProgress: 0,
+				idleTimer: 0,
 				autoInteract
 			};
 			props.set(id, placement);
@@ -313,11 +320,20 @@ export function createScenePropsManager(scene: THREE.Scene): ScenePropsManager {
 						prop.mesh.scale.set(1, 1, 1);
 					}
 				} else if (prop.state === 'idle' || prop.state === 'targeted') {
-					// Gentle idle animation — subtle hover bob + slow rotation
-					const phase = elapsedTime * 1.2 + prop.worldX * 0.7; // offset by position for variety
+					// Gentle idle animation ??subtle hover bob + slow rotation				// track how long prop has lingered; auto-expire after threshold
+				if (prop.state === 'idle') {
+					prop.idleTimer += delta;
+					if (prop.idleTimer > SCENE_PROP_LIFETIME_SECONDS) {
+						prop.state = 'despawning';
+						prop.despawnProgress = 0;
+					}
+				} else {
+					prop.idleTimer = 0;
+				}
+				  const phase = elapsedTime * 1.2 + prop.worldX * 0.7; // offset by position for variety
 					const bob = Math.sin(phase) * 0.08;
 					prop.mesh.position.y = GROUND_Y + bob;
-					prop.mesh.rotation.z = Math.sin(phase * 0.6) * 0.05;
+					prop.mesh.rotation.z = prop.initialRotZ + Math.sin(phase * 0.6) * 0.05;
 					// Soft glow pulse via emissive on first child mesh
 					const firstMesh = prop.mesh instanceof THREE.Mesh
 						? prop.mesh
@@ -360,7 +376,8 @@ export function createScenePropsManager(scene: THREE.Scene): ScenePropsManager {
 				type: p.type,
 				state: p.state,
 				worldX: p.worldX,
-				worldZ: p.worldZ
+				worldZ: p.worldZ,
+					timer: p.idleTimer
 			}));
 		}
 	};

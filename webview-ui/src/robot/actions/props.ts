@@ -103,7 +103,8 @@ export function updateProps(delta: number, action: string, props: RobotProps) {
 				prop.mesh.position.y = -4.3;
 				prop.vel.set(0, 0, 0);
 				prop.state = 'ground';
-				prop.mesh.rotation.set(-Math.PI / 2, 0, Math.random() * Math.PI);
+				// give dropped props a full‑circle yaw variance (was only half-circle previously)
+				prop.mesh.rotation.set(-Math.PI / 2, 0, Math.random() * Math.PI * 2 - Math.PI);
 			}
 		} else if (prop.state === 'ground') {
 			prop.groundTimer += delta;

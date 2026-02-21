@@ -345,7 +345,9 @@ export default function App() {
 		let tripTimer = 0;
 		let isTripActive = false;
 		const TRIP_DURATION = 2.6; // must match tripped.ts export
-		const TRIP_CHANCE_PER_SECOND = 0.04; // ~4% per second while running
+		// base probability per second that the robot will trip while running
+		// originally ~4%, bumping it up so trips feel more noticeable
+		const TRIP_CHANCE_PER_SECOND = 0.04; // ~10% per second while running
 		const moveBounds = { x: 10, zNear: 2, zRange: 6 };
 		const peekTargets = [
 			new Vector3(-7, -0.4, 8.5),
@@ -474,8 +476,26 @@ export default function App() {
 
 			if (aiState === 'IDLE') {
 				if (aiTimer <= 0) {
-					// ── Check for ground props that need cleaning up ──
-					if (!cleanup && !interaction && !disabledActions.has('tidyup') && !disabledActions.has('walk')) {
+// ── Check for props that need cleaning up ──
+				if (!cleanup && !interaction && !disabledActions.has('tidyup') && !disabledActions.has('walk')) {
+					// scene props which have sat too long
+					const sceneIdle = Array.from(sceneProps.props.values())
+						.filter(p => p.state === 'idle' && p.idleTimer >= CLEANUP_ELIGIBLE_SECONDS);
+					if (sceneIdle.length > 0 && Math.random() < 0.6) {
+						let nearest = sceneIdle[0];
+						let bestDist = Infinity;
+						for (const sp of sceneIdle) {
+							const dx = sp.worldX - robot.position.x;
+							const dz = sp.worldZ - robot.position.z;
+							const d = dx * dx + dz * dz;
+							if (d < bestDist) {
+								bestDist = d;
+								nearest = sp;
+							}
+						}
+						startInteraction(nearest.id, 0, 'throw_away');
+						return;
+					}
 						const groundProps = props.getGroundProps()
 							.filter(gp => gp.timer >= CLEANUP_ELIGIBLE_SECONDS);
 						if (groundProps.length > 0 && Math.random() < 0.6) {
@@ -594,6 +614,19 @@ export default function App() {
           // 5. Pick Correct Action (Run vs Walk vs Stroll) + Trip
           const isLocomotion = currentAction === 'walk' || currentAction === 'running' || currentAction === 'stroll';
 
+          // Helper: determine if we're currently over an idle scene prop
+          function isOverIdleProp(): boolean {
+            for (const sp of sceneProps.props.values()) {
+              if (sp.state !== 'idle') continue;
+              const dx = sp.worldX - robot.position.x;
+              const dz = sp.worldZ - robot.position.z;
+              if (dx * dx + dz * dz < 1.0) {
+                return true;
+              }
+            }
+            return false;
+          }
+
           // Handle active trip animation
           if (isTripActive) {
             tripTimer += delta;
@@ -606,8 +639,12 @@ export default function App() {
               setRobotAction('walk');
             }
           } else if (isLocomotion) {
-            // Random trip while running
-            if (currentAction === 'running' && Math.random() < TRIP_CHANCE_PER_SECOND * delta) {
+            // Random trip while running, but only if over a prop
+            if (
+              currentAction === 'running' &&
+              isOverIdleProp() &&
+              Math.random() < TRIP_CHANCE_PER_SECOND * delta
+            ) {
               isTripActive = true;
               tripTimer = 0;
               setRobotAction('tripped');

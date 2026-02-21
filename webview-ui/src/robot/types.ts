@@ -125,8 +125,12 @@ export type ScenePropPlacement = {
 	state: ScenePropState;
 	worldX: number;
 	worldZ: number;
+	// remember the rotation we initially gave the prop so idle animation can
+	// oscillate around it without resetting back to zero.
+	initialRotZ: number;
 	spawnProgress: number;
 	despawnProgress: number;
+	idleTimer: number;            // seconds spent idle (used for automatic cleanup)
 	autoInteract: boolean;
 };
 
