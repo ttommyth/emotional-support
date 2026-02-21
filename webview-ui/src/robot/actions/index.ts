@@ -28,6 +28,7 @@ import { peek } from './peek';
 import { tidyup } from './tidyup';
 import { stroll } from './stroll';
 import { tripped } from './tripped';
+import { inspect } from './inspect';
 
 /** All action definitions (may carry an optional `prop` field from defineAction) */
 type ActionWithProp = RobotActionDefinition & { prop?: PropDefinition };
@@ -58,6 +59,7 @@ const allActions: ActionWithProp[] = [
 	shrug,
 	knocked,
 	peek,
+	inspect,
 	tidyup,
 	stroll,
 	tripped

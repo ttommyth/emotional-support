@@ -317,8 +317,11 @@ export default function App() {
 		function startInteraction(propId: string, durationAfterPickup: number, finishBehavior: FinishBehavior = 'none') {
 			const prop = sceneProps.getById(propId);
 			if (!prop) return;
-			const targetAction = SCENE_PROP_ACTION_MAP[prop.type];
-			if (!targetAction) return;
+			let targetAction = SCENE_PROP_ACTION_MAP[prop.type];
+			if (!targetAction) {
+				// decorations (and any unmapped type) still get inspected
+				targetAction = 'inspect';
+			}
 			prop.state = 'targeted';
 			interaction = {
 				phase: 'walking',
@@ -1395,6 +1398,24 @@ export default function App() {
 				const duration = typeof message.durationSeconds === 'number' ? message.durationSeconds : 5;
 				const finish = (typeof message.finishBehavior === 'string' ? message.finishBehavior : 'none') as FinishBehavior;
 				startInteraction(message.propId, duration, finish);
+				return;
+			}
+			if (message?.command === 'INTERACT_CLOSEST_PROP') {
+				// find nearest scene prop regardless of state
+				let nearestId: string | null = null;
+				let bestDist = Infinity;
+				for (const sp of sceneProps.props.values()) {
+					const dx = sp.worldX - robot.position.x;
+					const dz = sp.worldZ - robot.position.z;
+					const d = dx * dx + dz * dz;
+					if (d < bestDist) {
+						bestDist = d;
+						nearestId = sp.id;
+					}
+				}
+				if (nearestId) {
+					startInteraction(nearestId, 0, 'none');
+				}
 				return;
 			}
 		};

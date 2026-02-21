@@ -38,7 +38,8 @@ export type RobotActionName =
 	| 'knocked'
 	| 'tidyup'
 	| 'stroll'
-	| 'tripped';
+	| 'tripped'
+	| 'inspect';
 
 export type RobotActionContext = {
 	targets: RobotTargets;
@@ -102,14 +103,17 @@ export type ScenePropType =
  * `null` means decoration-only (no pickup interaction possible).
  */
 export const SCENE_PROP_ACTION_MAP: Record<ScenePropType, RobotActionName | null> = {
-	paper: 'reading',
-	laptop: 'coding',
-	magnifying_glass: 'debugging',
-	clipboard: 'reviewing',
-	wrench: 'refactoring',
-	test_tubes: 'testing',
-	lightbulb: 'thinking',
-	book: 'reading',
+	// all interactive props now trigger the generic inspect animation. we still
+	// keep null for purely decorative items so they can optionally be treated
+	// differently if the fallback logic is ever removed.
+	paper: 'inspect',
+	laptop: 'inspect',
+	magnifying_glass: 'inspect',
+	clipboard: 'inspect',
+	wrench: 'inspect',
+	test_tubes: 'inspect',
+	lightbulb: 'inspect',
+	book: 'inspect',
 	coffee_mug: null,
 	star: null,
 	trophy: null

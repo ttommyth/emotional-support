@@ -669,6 +669,16 @@ class PetViewProvider implements vscode.WebviewViewProvider {
 		this.onStateChange?.(this.getState());
 	}
 
+	/** Tell the pet view to pick up the closest scene prop using its internal
+	 * lookup logic. This mirrors the new webview message type received by App.tsx.
+	 */
+	public interactClosestProp() {
+		if (!this.view) {
+			return;
+		}
+		this.view.webview.postMessage({ command: 'INTERACT_CLOSEST_PROP' });
+	}
+
 	private getHtmlForWebview(webview: vscode.Webview) {
 		const distPath = vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist');
 		const indexPath = vscode.Uri.joinPath(distPath, 'index.html');
@@ -871,6 +881,15 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						return;
 					}
 					this.petViewProvider.setScene({ props: [] });
+					break;
+				}
+				case 'INTERACT_CLOSEST_PROP': {
+					if (!this.petViewProvider.isReady()) {
+						vscode.window.showInformationMessage('Open the Emotional Support view to control the robot.');
+						return;
+					}
+					// send to the pet view, not back to control panel
+					this.petViewProvider.interactClosestProp();
 					break;
 				}
 				default:

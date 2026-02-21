@@ -58,7 +58,7 @@ const ACTION_DISPLAY: Record<string, string> = {
 
 const ACTION_ORDER = [
 	'idle', 'thinking', 'coding', 'debugging', 'reviewing', 'refactoring',
-	'testing', 'reading', 'success', 'error', 'sleep', 'sit', 'laydown',
+	'testing', 'reading', 'inspect', 'success', 'error', 'sleep', 'sit', 'laydown',
 	'laydownflat', 'rest', 'running', 'ballet', 'walk', 'wave', 'stretch',
 	'dance', 'lookaround', 'shrug', 'peek', 'knocked'
 ];
@@ -245,6 +245,10 @@ export default function ControlPanel() {
 			return;
 		}
 		postMessage({ command: 'SET_SCENE', props: [] });
+	};
+
+	const handleInteractClosest = () => {
+		postMessage({ command: 'INTERACT_CLOSEST_PROP' });
 	};
 
 	const handleSendToast = (text: string, mood?: string) => {
@@ -506,6 +510,12 @@ export default function ControlPanel() {
 					Clear Scene
 				</button>
 				<p className="hint">Remove all ground props.</p>
+			</div>
+			<div className="panel-row" style={{ marginTop: '8px' }}>
+				<button className="btn" type="button" onClick={handleInteractClosest}>
+					Interact Closest Prop
+				</button>
+				<p className="hint">Tell robot to walk over and pick up the nearest prop.</p>
 			</div>
 			<h3 style={{ marginTop: '8px', fontSize: '0.85em', opacity: 0.8 }}>Place &amp; Pick Up</h3>
 			<p className="hint">Place a prop and robot auto-walks to pick it up.</p>

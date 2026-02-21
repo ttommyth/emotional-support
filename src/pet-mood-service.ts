@@ -7,6 +7,7 @@ export const PET_ACTIONS = [
 	'refactoring',
 	'testing',
 	'reading',
+	'inspect',
 	'success',
 	'error',
 	'sleep',
