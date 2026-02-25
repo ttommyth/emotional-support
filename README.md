@@ -1,3 +1,5 @@
+<img width="1012" height="731" alt="image" src="https://github.com/user-attachments/assets/8d73db54-9afd-4222-8d10-e9ef8f9702b8" />
+
 # Emotional Support
 
 Emotional Support is a VS Code extension that opens a webview-based companion panel and includes a lightweight pet mood service scaffold for future AI-driven reactions.
