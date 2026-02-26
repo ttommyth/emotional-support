@@ -104,12 +104,16 @@ export class ChatLogWatcher implements vscode.Disposable {
 				}
 				try {
 					const watcher = fs.watch(target, (_event, filename) => {
-						if (!filename) {
-							return;
-						}
-						const name = filename.toString();
-						if (name.endsWith('.json')) {
-							this.scheduleRead(path.join(target, name));
+						try {
+							if (!filename) {
+								return;
+							}
+							const name = filename.toString();
+							if (name.endsWith('.json')) {
+								this.scheduleRead(path.join(target, name));
+							}
+						} catch {
+							// best-effort — don't let watcher errors propagate
 						}
 					});
 					this.watchers.push(watcher);
@@ -133,10 +137,14 @@ export class ChatLogWatcher implements vscode.Disposable {
 
 		try {
 			const watcher = fs.watch(this.workspaceHashDir, (_event, filename) => {
-				if (!filename || filename.toString() !== CURSOR_VSCDB) {
-					return;
+				try {
+					if (!filename || filename.toString() !== CURSOR_VSCDB) {
+						return;
+					}
+					this.handleCursorActivity(vscdbPath);
+				} catch {
+					// best-effort — don't let watcher errors propagate
 				}
-				this.handleCursorActivity(vscdbPath);
 			});
 			this.watchers.push(watcher);
 			this.output?.appendLine(`[ChatLogWatcher] Watching Cursor state.vscdb at ${vscdbPath}`);
