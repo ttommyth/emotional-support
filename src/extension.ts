@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { McpBridge, RobotControlState, type ScenePropCommandEntry } from './mcp-bridge';
 import { CursorHookBridge } from './cursor-hook-bridge';
+import { ChatLogWatcher } from './chat-log-watcher';
 import { PET_ACTIONS, PetAction, PetMoodService, SCENE_PROP_TYPES, SCENE_POSITIONS } from './pet-mood-service';
 import { WorkspaceVibeService, type WorkspaceVibe } from './workspace-vibe-service';
 import { MoodInterpreter, type Personality } from './mood-interpreter';
@@ -345,6 +346,21 @@ export function activate(context: vscode.ExtensionContext) {
 		getOutputChannel().appendLine(
 			`To avoid committing hook files to the project, place your Cursor hook script in your home hooks and have it write events to: ${globalEventDir}`
 		);
+	}
+
+	// ─── Optional Chat Log Listening ──────────────────────────────────────
+	const chatLogEnabled = vscode.workspace.getConfiguration('emotional-support').get<boolean>('chatLogListening', false);
+	if (chatLogEnabled) {
+		const workspaceHashDir = context.storageUri
+			? path.dirname(context.storageUri.fsPath)
+			: undefined;
+		const chatLogWatcher = new ChatLogWatcher(
+			workspaceHashDir,
+			(payload) => moodService.setPetMood(payload),
+			getOutputChannel()
+		);
+		context.subscriptions.push(chatLogWatcher);
+		getOutputChannel().appendLine('[ChatLogWatcher] Chat log listening enabled.');
 	}
 
 	// Initialize extension OutputChannel and register show/clear commands

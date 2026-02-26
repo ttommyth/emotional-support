@@ -234,6 +234,11 @@
           "minimum": 3,
           "maximum": 30,
           "description": "How long (in seconds) thought bubbles stay visible before fading."
+        },
+        "emotional-support.chatLogListening": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable listening to AI chat logs (GitHub Copilot sessions, Cursor state) to adjust robot emotions based on tool calls and conversation activity. Reads chat session files stored locally by your IDE. Disabled by default for privacy."
         }
       }
     }
