@@ -78,6 +78,10 @@
       {
         "command": "emotional-support.showVibeStatus",
         "title": "Emotional Support: Show Current Vibe Status"
+      },
+      {
+        "command": "emotional-support.toggleChatLog",
+        "title": "Emotional Support: Toggle Chat Log Listening (On/Off)"
       }
     ],
     "mcpServerDefinitionProviders": [

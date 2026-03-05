@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { McpBridge, RobotControlState, type ScenePropCommandEntry } from './mcp-bridge';
 import { CursorHookBridge } from './cursor-hook-bridge';
-import { ChatLogWatcher } from './chat-log-watcher';
+import { ChatLogWatcher, type ChatLogStatus } from './chat-log-watcher';
 import { PET_ACTIONS, PetAction, PetMoodService, SCENE_PROP_TYPES, SCENE_POSITIONS } from './pet-mood-service';
 import { WorkspaceVibeService, type WorkspaceVibe } from './workspace-vibe-service';
 import { MoodInterpreter, type Personality } from './mood-interpreter';
@@ -308,8 +308,9 @@ export function activate(context: vscode.ExtensionContext) {
 			webviewOptions: { retainContextWhenHidden: true }
 		})
 	);
+	let controlViewProvider: PetControlViewProvider | undefined;
 	if (isDevMode) {
-		const controlViewProvider = new PetControlViewProvider(context.extensionUri, petViewProvider, vibeService, moodHistory);
+		controlViewProvider = new PetControlViewProvider(context.extensionUri, petViewProvider, vibeService, moodHistory);
 		context.subscriptions.push(
 			vscode.window.registerWebviewViewProvider(PetControlViewProvider.viewType, controlViewProvider, {
 				webviewOptions: { retainContextWhenHidden: true }
@@ -320,7 +321,7 @@ export function activate(context: vscode.ExtensionContext) {
 		const showControlPanel = vscode.workspace.getConfiguration('emotional-support').get<boolean>('showControlPanel', false);
 		if (showControlPanel) {
 			vscode.commands.executeCommand('setContext', 'emotional-support.showControlPanel', true);
-			const controlViewProvider = new PetControlViewProvider(context.extensionUri, petViewProvider, vibeService, moodHistory);
+			controlViewProvider = new PetControlViewProvider(context.extensionUri, petViewProvider, vibeService, moodHistory);
 			context.subscriptions.push(
 				vscode.window.registerWebviewViewProvider(PetControlViewProvider.viewType, controlViewProvider, {
 					webviewOptions: { retainContextWhenHidden: true }
@@ -349,19 +350,49 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	// ─── Optional Chat Log Listening ──────────────────────────────────────
-	const chatLogEnabled = vscode.workspace.getConfiguration('emotional-support').get<boolean>('chatLogListening', false);
-	if (chatLogEnabled) {
-		const workspaceHashDir = context.storageUri
-			? path.dirname(context.storageUri.fsPath)
-			: undefined;
-		const chatLogWatcher = new ChatLogWatcher(
-			workspaceHashDir,
-			(payload) => moodService.setPetMood(payload),
-			getOutputChannel()
-		);
-		context.subscriptions.push(chatLogWatcher);
-		getOutputChannel().appendLine('[ChatLogWatcher] Chat log listening enabled.');
-	}
+	// Two levels up from context.storageUri gives .../User/workspaceStorage/
+	// (context.storageUri itself is .../workspaceStorage/<hash>/)
+	// so path.dirname once → <hash dir>, path.dirname twice → workspaceStorage root.
+	const workspaceStorageRoot = context.storageUri
+		? path.dirname(path.dirname(context.storageUri.fsPath))
+		: undefined;
+
+	let activeChatLogWatcher: ChatLogWatcher | undefined;
+
+	const createChatLogWatcher = (forceEnabled?: boolean) => {
+		activeChatLogWatcher?.dispose();
+		activeChatLogWatcher = undefined;
+		const enabled = forceEnabled ?? vscode.workspace.getConfiguration('emotional-support').get<boolean>('chatLogListening', false);
+		if (enabled) {
+			getOutputChannel().appendLine(`[ChatLogWatcher] Enabling. storageRoot=${workspaceStorageRoot ?? '(none)'}`);
+			activeChatLogWatcher = new ChatLogWatcher(
+				workspaceStorageRoot,
+				(payload) => moodService.setPetMood(payload),
+				getOutputChannel()
+			);
+		} else {
+			getOutputChannel().appendLine('[ChatLogWatcher] Disabled.');
+		}
+		controlViewProvider?.sendChatLogStatus(enabled, activeChatLogWatcher?.getStatus());
+	};
+
+	createChatLogWatcher();
+	controlViewProvider?.setChatLogToggler((en) => createChatLogWatcher(en));
+
+	context.subscriptions.push({
+		dispose: () => activeChatLogWatcher?.dispose()
+	});
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('emotional-support.toggleChatLog', async () => {
+			const config = vscode.workspace.getConfiguration('emotional-support');
+			const current = config.get<boolean>('chatLogListening', false);
+			const next = !current;
+			await config.update('chatLogListening', next, vscode.ConfigurationTarget.Global);
+			createChatLogWatcher(next);
+			vscode.window.showInformationMessage(`Emotional Support: Chat log listening is now ${next ? 'ON' : 'OFF'}.`);
+		})
+	);
 
 	// Initialize extension OutputChannel and register show/clear commands
 	getOutputChannel().appendLine(`Activated Emotional Support v${String(context.extension.packageJSON?.version ?? '0.0.0')}`);
@@ -743,6 +774,9 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 	private readonly vibeService: WorkspaceVibeService;
 	private readonly moodHistory: MoodHistoryService;
 	private vibeUpdateInterval: NodeJS.Timeout | undefined;
+	private chatLogEnabled = false;
+	private chatLogStatus: ChatLogStatus | undefined;
+	private chatLogToggler: ((enabled: boolean) => void) | undefined;
 
 	constructor(
 		extensionUri: vscode.Uri,
@@ -754,6 +788,18 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 		this.petViewProvider = petViewProvider;
 		this.vibeService = vibeService;
 		this.moodHistory = moodHistory;
+	}
+
+	public setChatLogToggler(toggler: (enabled: boolean) => void) {
+		this.chatLogToggler = toggler;
+	}
+
+	public sendChatLogStatus(enabled: boolean, status?: ChatLogStatus) {
+		this.chatLogEnabled = enabled;
+		this.chatLogStatus = status;
+		if (this.view) {
+			this.view.webview.postMessage({ command: 'CHAT_LOG_UPDATE', enabled, status });
+		}
 	}
 
 	public resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -778,7 +824,9 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 						sessionSummary: summary,
 						personality: config.get<string>('personality', 'supportive'),
 						vibeReactions: config.get<boolean>('vibeReactions', true),
-						defaultTemperature: config.get<number>('defaultTemperature', 0.5)
+						defaultTemperature: config.get<number>('defaultTemperature', 0.5),
+						chatLogEnabled: this.chatLogEnabled,
+						chatLogStatus: this.chatLogStatus
 					});
 					// Start periodic vibe updates
 					if (this.vibeUpdateInterval) {
@@ -815,6 +863,17 @@ class PetControlViewProvider implements vscode.WebviewViewProvider {
 					if (typeof message?.enabled === 'boolean') {
 						vscode.workspace.getConfiguration('emotional-support').update('vibeReactions', message.enabled, vscode.ConfigurationTarget.Global);
 					}
+					break;
+				}
+				case 'SET_CHAT_LOG': {
+					if (typeof message?.enabled === 'boolean') {
+						void vscode.workspace.getConfiguration('emotional-support').update('chatLogListening', message.enabled, vscode.ConfigurationTarget.Global);
+						this.chatLogToggler?.(message.enabled);
+					}
+					break;
+				}
+				case 'SHOW_CHAT_LOG_OUTPUT': {
+					getOutputChannel().show(true);
 					break;
 				}
 				case 'SHOW_SESSION_SUMMARY': {
