@@ -25,6 +25,16 @@ type SessionSummary = {
 	vibeJourney: string;
 };
 
+type ChatLogStatus = {
+	enabled: boolean;
+	storageRoot: string | undefined;
+	watchedPaths: string[];
+	lazyWatching: boolean;
+	lastActivityTime: number | undefined;
+	lastActivityType: string | undefined;
+	totalEventsDetected: number;
+};
+
 type InitMessage = {
 	command: 'INIT';
 	actions: string[];
@@ -34,6 +44,14 @@ type InitMessage = {
 	personality?: string;
 	vibeReactions?: boolean;
 	defaultTemperature?: number;
+	chatLogEnabled?: boolean;
+	chatLogStatus?: ChatLogStatus;
+};
+
+type ChatLogUpdateMessage = {
+	command: 'CHAT_LOG_UPDATE';
+	enabled: boolean;
+	status?: ChatLogStatus;
 };
 
 type VibeUpdateMessage = {
@@ -47,7 +65,7 @@ type AutopilotUpdateMessage = {
 	enabled: boolean;
 };
 
-type ViewMessage = InitMessage | VibeUpdateMessage | AutopilotUpdateMessage;
+type ViewMessage = InitMessage | VibeUpdateMessage | AutopilotUpdateMessage | ChatLogUpdateMessage;
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -160,6 +178,8 @@ export default function ControlPanel() {
 	const [vibeReactions, setVibeReactions] = useState(true);
 	const [customToast, setCustomToast] = useState('');
 	const [temperature, setTemperature] = useState(0.5);
+	const [chatLogEnabled, setChatLogEnabled] = useState(false);
+	const [chatLogStatus, setChatLogStatus] = useState<ChatLogStatus | null>(null);
 	const localPropSeqRef = useRef(0);
 
 	const postMessage = (message: unknown) => {
@@ -184,6 +204,8 @@ export default function ControlPanel() {
 				if (data.personality) { setPersonality(data.personality); }
 				if (data.vibeReactions !== undefined) { setVibeReactions(data.vibeReactions); }
 				if (typeof data.defaultTemperature === 'number') { setTemperature(data.defaultTemperature); }
+				if (data.chatLogEnabled !== undefined) { setChatLogEnabled(data.chatLogEnabled); }
+				if (data.chatLogStatus) { setChatLogStatus(data.chatLogStatus); }
 				setStatus('ready');
 				return;
 			}
@@ -194,6 +216,11 @@ export default function ControlPanel() {
 			}
 			if (data.command === 'AUTOPILOT_UPDATE') {
 				setAutopilotEnabled(data.enabled);
+			}
+			if (data.command === 'CHAT_LOG_UPDATE') {
+				setChatLogEnabled(data.enabled);
+				if (data.status) { setChatLogStatus(data.status); }
+				if (!data.enabled) { setChatLogStatus(null); }
 			}
 		};
 		window.addEventListener('message', onMessage);
@@ -285,6 +312,21 @@ export default function ControlPanel() {
 	const handleShowSummary = () => {
 		if (isVsCode) {
 			postMessage({ command: 'SHOW_SESSION_SUMMARY' });
+		}
+	};
+
+	const handleChatLogToggle = () => {
+		const next = !chatLogEnabled;
+		setChatLogEnabled(next);
+		if (!next) { setChatLogStatus(null); }
+		if (isVsCode) {
+			postMessage({ command: 'SET_CHAT_LOG', enabled: next });
+		}
+	};
+
+	const handleShowChatLogOutput = () => {
+		if (isVsCode) {
+			postMessage({ command: 'SHOW_CHAT_LOG_OUTPUT' });
 		}
 	};
 
@@ -409,6 +451,64 @@ export default function ControlPanel() {
 				</button>
 				<p className="hint">Auto-react to workspace stress.</p>
 			</div>
+		</section>
+
+		{/* ── AI Chat Log Listening ──────────────────────────────── */}
+		<section className="panel">
+			<h2>🤖 AI Chat Listening</h2>
+			<p className="hint">React to GitHub Copilot tool calls and responses. Cursor support coming soon.</p>
+			<div className="panel-row">
+				<button
+					className={`btn${chatLogEnabled ? ' primary' : ''}`}
+					type="button"
+					onClick={handleChatLogToggle}
+				>
+					Chat Log: {chatLogEnabled ? 'On' : 'Off'}
+				</button>
+				<button className="btn" type="button" onClick={handleShowChatLogOutput}>
+					Show Output
+				</button>
+			</div>
+			{chatLogEnabled && chatLogStatus && (
+				<div className="vibe-details" style={{ marginTop: '8px' }}>
+					<div className="vibe-detail-row">
+						<span>Status</span>
+						<span>{chatLogStatus.lazyWatching ? '⏳ waiting for first chat' : chatLogStatus.watchedPaths.length > 0 ? '✅ active' : '⚠️ no dirs'}</span>
+					</div>
+					<div className="vibe-detail-row">
+						<span>Watched dirs</span>
+						<span>{chatLogStatus.watchedPaths.length > 0 ? chatLogStatus.watchedPaths.length : '—'}</span>
+					</div>
+					<div className="vibe-detail-row">
+						<span>Events detected</span>
+						<span>{chatLogStatus.totalEventsDetected}</span>
+					</div>
+					{chatLogStatus.lastActivityType && (
+						<div className="vibe-detail-row">
+							<span>Last activity</span>
+							<span>{chatLogStatus.lastActivityType}</span>
+						</div>
+					)}
+					{chatLogStatus.lazyWatching && (
+						<p className="hint" style={{ marginTop: '4px' }}>
+							Waiting for Copilot chat to start. Open a Copilot Chat in this workspace to activate.
+						</p>
+					)}
+					{!chatLogStatus.lazyWatching && chatLogStatus.watchedPaths.length === 0 && (
+						<p className="hint" style={{ marginTop: '4px', color: 'var(--vscode-editorWarning-foreground)' }}>
+							No directories found and no lazy watcher. Try reloading.
+						</p>
+					)}
+					{chatLogStatus.watchedPaths.length > 0 && chatLogStatus.watchedPaths.slice(0, 2).map((p) => (
+						<p key={p} className="hint" style={{ fontFamily: 'monospace', wordBreak: 'break-all', marginTop: '2px' }}>
+							{p.split(/[\\/]/).slice(-3).join('/')}
+						</p>
+					))}
+				</div>
+			)}
+			{chatLogEnabled && !chatLogStatus && (
+				<p className="hint" style={{ marginTop: '6px' }}>Initializing watcher…</p>
+			)}
 		</section>
 
 		{/* ── Thought Bubble Tester ──────────────────────────────── */}

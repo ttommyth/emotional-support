@@ -4,6 +4,14 @@
 
 **Emotional Support** is a VS Code extension (TypeScript) that renders an interactive 3D robot companion in a sidebar webview panel. The robot reacts to developer activity, MCP tool calls, Cursor hooks, and window focus events. It is published under the `problemsofa` publisher.
 
+## Important
+
+[ ] **Ask user approval / feedback with `ask_questions` tool** 
+
+[ ] **ALWAYS** ask if user satisfied with the result before ending the conversation.
+
+[ ] If user is not satisfied, ask what they would like to do next: retry, fix, or end.
+
 ## Repository Layout
 
 ```
@@ -215,6 +223,15 @@ All settings live under the `emotional-support.*` namespace in `package.json` `c
 - `disabledActions` config filters actions from autopilot and unfocused pools
 - The MCP server definition is registered via `vscode.lm.registerMcpServerDefinitionProvider`
 - The `EMOTIONAL_SUPPORT_BRIDGE_DIR` env var connects the MCP server process to the extension's global storage
+
+## Important
+
+[ ] **Ask user approval / feedback with `ask_questions` tool** 
+
+[ ] **ALWAYS** ask if user satisfied with the result before ending the conversation.
+
+[ ] If user is not satisfied, ask what they would like to do next: retry, fix, or end.
+
 
 ## What NOT to Do
 
