@@ -4,8 +4,8 @@ import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as z from 'zod/v4';
-import { MCP_COMMAND_FILE, MCP_STATE_FILE, type RobotControlCommand, type RobotControlState } from './mcp-bridge';
-import { PET_ACTIONS, SCENE_PROP_TYPES, SCENE_POSITIONS } from './pet-mood-service';
+import { MCP_COMMAND_FILE, MCP_STATE_FILE, type RobotControlCommand, type RobotControlState } from './bridge/mcp-protocol';
+import { PET_ACTIONS, SCENE_PROP_TYPES, SCENE_POSITIONS } from './domain/actions';
 
 const EMOTIONS = PET_ACTIONS.join(', ');
 

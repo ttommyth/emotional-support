@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getOutputChannel } from './extension';
+import { getOutputChannel } from '../extension';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 

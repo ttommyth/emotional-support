@@ -1,6 +1,6 @@
 import type { WorkspaceVibe, VibeLevel } from './workspace-vibe-service';
 import { vibeLevel } from './workspace-vibe-service';
-import { getOutputChannel } from './extension';
+import { getOutputChannel } from '../extension';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 

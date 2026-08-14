@@ -1,67 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { VibeData, SessionSummary, ViewMessage } from './control-protocol';
+import { ACTION_ORDER, ACTION_DISPLAY } from '../robot/action-labels';
+import type { RobotActionName } from '../robot/types';
 
 declare const acquireVsCodeApi: (() => { postMessage: (message: unknown) => void }) | undefined;
 
-// ─── Types ────────────────────────────────────────────────────────────────
-
-type VibeData = {
-	stressScore: number;
-	errorCount: number;
-	warningCount: number;
-	timeSinceLastSaveMs: number;
-	contextSwitchRate: number;
-	typingIntensity: number;
-	deletionSpike: boolean;
-	gitState: string;
-	summary: string;
-};
-
-type SessionSummary = {
-	sessionDurationMinutes: number;
-	averageStress: number;
-	peakStress: number;
-	timeInLevels: Record<string, number>;
-	peakErrors: number;
-	vibeJourney: string;
-};
-
-type InitMessage = {
-	command: 'INIT';
-	actions: string[];
-	autopilotEnabled: boolean;
-	vibe?: VibeData;
-	sessionSummary?: SessionSummary;
-	personality?: string;
-	vibeReactions?: boolean;
-	defaultTemperature?: number;
-};
-
-type VibeUpdateMessage = {
-	command: 'VIBE_UPDATE';
-	vibe: VibeData;
-	sessionSummary: SessionSummary;
-};
-
-type AutopilotUpdateMessage = {
-	command: 'AUTOPILOT_UPDATE';
-	enabled: boolean;
-};
-
-type ViewMessage = InitMessage | VibeUpdateMessage | AutopilotUpdateMessage;
-
 // ─── Constants ────────────────────────────────────────────────────────────
-
-const ACTION_DISPLAY: Record<string, string> = {
-	laydownflat: 'Lay Down Flat',
-	lookaround: 'Look Around'
-};
-
-const ACTION_ORDER = [
-	'idle', 'thinking', 'coding', 'debugging', 'reviewing', 'refactoring',
-	'testing', 'reading', 'inspect', 'success', 'error', 'sleep', 'sit', 'laydown',
-	'laydownflat', 'rest', 'running', 'ballet', 'walk', 'wave', 'stretch',
-	'dance', 'lookaround', 'shrug', 'peek', 'knocked'
-];
 
 const SCENE_PROP_PRESETS: Array<{ label: string; type: string; icon: string }> = [
 	{ label: 'Paper', type: 'paper', icon: '📄' },
@@ -102,16 +46,18 @@ const DEFAULT_ACTIONS: string[] = ACTION_ORDER;
 
 const sortActions = (actions: string[]) => {
 	const unique = Array.from(new Set(actions));
-	const ordered = unique.filter((action) => ACTION_ORDER.includes(action));
-	const remaining = unique.filter((action) => !ACTION_ORDER.includes(action)).sort();
+	const order = new Set<string>(ACTION_ORDER);
+	const ordered = unique.filter((action) => order.has(action));
+	const remaining = unique.filter((action) => !order.has(action)).sort();
 	return [...ordered, ...remaining];
 };
 
 const titleCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 const formatAction = (action: string) => {
-	if (ACTION_DISPLAY[action]) {
-		return ACTION_DISPLAY[action];
+	const display = ACTION_DISPLAY[action as RobotActionName];
+	if (display) {
+		return display;
 	}
 	return action
 		.split(/[_-]/g)

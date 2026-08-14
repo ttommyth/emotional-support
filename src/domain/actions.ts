@@ -1,3 +1,12 @@
+/**
+ * Canonical domain vocabulary — the single source of truth for robot actions,
+ * scene prop types, and named ground positions.
+ *
+ * Mirrored in the webview at `webview-ui/src/robot/types.ts`
+ * (RobotActionName / ScenePropType); the consistency guard in
+ * `src/test/action-consistency.test.ts` fails if the two drift.
+ */
+
 export const PET_ACTIONS = [
 	'idle',
 	'thinking',
@@ -53,44 +62,3 @@ export type ScenePropType = (typeof SCENE_PROP_TYPES)[number];
 export const SCENE_POSITIONS = ['far-left', 'left', 'center-left', 'center', 'center-right', 'right', 'far-right', 'back-left', 'back', 'back-right', 'front', 'front-left', 'front-right'] as const;
 
 export type ScenePosition = (typeof SCENE_POSITIONS)[number];
-
-export type PetMoodPayload = {
-	mood: PetAction;
-	message?: string;
-	durationSeconds?: number;
-	/** Animation temperature 0–1. 0 = very calm, 0.5 = normal, 1 = hyper. Omit to keep current. */
-	temperature?: number;
-};
-
-export class PetMoodService {
-	private readonly onMoodChange: (payload: PetMoodPayload) => void;
-	private running = false;
-
-	constructor(onMoodChange: (payload: PetMoodPayload) => void) {
-		this.onMoodChange = onMoodChange;
-	}
-
-	public start() {
-		if (this.running) {
-			return;
-		}
-		this.running = true;
-		console.log('[PetMoodService] Started.');
-	}
-
-	public stop() {
-		if (!this.running) {
-			return;
-		}
-		this.running = false;
-		console.log('[PetMoodService] Stopped.');
-	}
-
-	public dispose() {
-		this.stop();
-	}
-
-	public setPetMood(payload: PetMoodPayload) {
-		this.onMoodChange(payload);
-	}
-}

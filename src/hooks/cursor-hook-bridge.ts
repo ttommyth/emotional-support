@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { PET_ACTIONS, type PetAction, type PetMoodPayload } from './pet-mood-service';
+import { PET_ACTIONS, type PetAction } from '../domain/actions';
+import type { PetMoodPayload } from '../services/pet-mood-service';
 
 const EVENT_FILENAME = 'emotional-support-event.json';
 const HOOKS_DIR = path.join('.cursor', 'hooks');

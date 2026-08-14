@@ -1,4 +1,4 @@
-import type { PetAction } from './pet-mood-service';
+import type { PetAction } from '../domain/actions';
 import type { WorkspaceVibe, VibeLevel } from './workspace-vibe-service';
 import { vibeLevel } from './workspace-vibe-service';
 
