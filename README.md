@@ -75,6 +75,15 @@ The live demo showcases the 3D robot companion with all its animations and inter
 - Open AI Pet Panel
 - Cycle AI Pet Mood (Demo)
 
+## Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — how the extension, MCP server, and webview are structured, plus the message protocol.
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** — setup, build, run, test, and debug.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — how to contribute.
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** — community standards.
+- **[ROADMAP.md](ROADMAP.md)** — planned work.
+- **[AGENTS.md](AGENTS.md)** — condensed guidance for AI coding agents.
+
 ## Run and Debug
 
 1. Install dependencies: `npm install`
