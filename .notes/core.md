@@ -156,3 +156,41 @@ To make the pet feel "alive" and aligned with the AI:
 | **Idle** | No events for 30s | **Sleeping/Eating** |
 
 ---
+
+## ✅ STATUS UPDATE — 2026-08-15
+
+This blueprint is **implemented** (publisher `problemsofa`, v0.0.5). What actually shipped vs. the original plan:
+
+| Blueprint idea | Implemented as |
+| --- | --- |
+| React + Canvas pet | **React 18 + Three.js** webview (`webview-ui/src/app/App.tsx` → thin shell over `RobotScene`), 3D robot, not 2D sprites |
+| MCP server (the brain) | `src/mcp-server.ts` (separate esbuild entry) exposing `set_robot_action`, `set_autopilot`, `force_move`, `set_scene`, `place_scene_prop`, `remove_scene_prop`, `interact_with_prop`; registered via `vscode.lm.registerMcpServerDefinitionProvider` |
+| Cursor hooks (nervous system) | `src/hooks/cursor-hook-bridge.ts` watches `emotional-support-event.json` (per-workspace `.cursor/hooks/` + global storage); sample hook in `hooks-samples/` |
+| Localhost HTTP for hooks | **Not used** — replaced by the file-based MCP bridge (`src/bridge/`) instead of a localhost server |
+| vscode-messenger | **Not used** — direct `webview.postMessage`/`onDidReceiveMessage` |
+
+**Post-refactor architecture (2026-08-15)** — see `docs/architecture-refactor.md` for the full plan:
+
+```
+src/  (extension host, Node)
+  extension.ts  (~150 lines — thin activate()/DI wiring)
+  commands.ts, mcp-registration.ts, window-monitor.ts, vibe-reactions.ts
+  domain/actions.ts      ← canonical PET_ACTIONS / SCENE_PROP_TYPES / SCENE_POSITIONS
+  services/              ← pet-mood, workspace-vibe, mood-interpreter, mood-history
+  hooks/cursor-hook-bridge.ts
+  bridge/                ← mcp-protocol (shared types) + mcp-bridge (watcher class)
+  webview/               ← html.ts (CSP/HTML), pet-view/, control-view/
+  test/                  ← 45 passing unit/consistency tests
+
+webview-ui/src/  (browser, Vite)
+  app/App.tsx (71 lines) + app/RobotScene.ts (RobotScene class)
+  robot/       types.ts, actions/, scene-props.ts, scene-context.ts, autopilot.ts, interaction.ts, action-labels.ts
+  scene/       setupScene.ts, createRobotMesh.ts
+  messaging/   protocol.ts, message-handler.ts
+  render/      render-loop.ts, lerp.ts
+  control-panel/ ControlPanel.tsx, control-protocol.ts
+```
+
+**Key post-refactor metrics:** `src/extension.ts` 945→~150 lines; `webview-ui/src/App.tsx` 1640→71 lines; the monolithic effect became a `RobotScene` class implementing `RobotSceneContext` + `RobotSceneController` with extracted `autopilot`/`interaction`/`render-loop`/`message-handler` modules.
+
+---

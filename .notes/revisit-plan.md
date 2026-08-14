@@ -126,3 +126,27 @@ The LLM is no longer a generic chatbot; it is a **Workspace Status Interpreter**
 
 * **Team "Vibe" (Optional):** If configured, allow the "Workspace Status" to be broadcast to a shared file (e.g., `.vscode/team-mood.json`) so the robot can comment on the *project's* health, not just the *user's* health.
 * **Telemetry (Local):** Show a "Mood Graph" in the output channel—tracking how the user's coding session went over time (e.g., "You spent 40% of the time in High Stress").
+
+---
+
+## ✅ STATUS UPDATE — 2026-08-15
+
+Most of this master plan is implemented, with deviations:
+
+| Plan item | Status | Notes |
+| --- | --- | --- |
+| Phase 1 — workspace signal audit | ✅ Done | `services/workspace-vibe-service.ts` aggregates diagnostics, text edits, saves, editor switches, git state into a `WorkspaceVibe` (stressScore 0–100 + `vibeLevel` thresholds 15/35/55/75) |
+| Phase 2 — Event Bus / Vibe Check | ✅ Done | `WorkspaceVibeService` debounces emits (15s), `VibeReactionController` (src/vibe-reactions.ts) drives reactions |
+| Phase 2 — config schema | ✅ Done | `emotional-support.*` settings in `package.json` (personality, highErrorThreshold, colors, animation/movement speed, temperature, disabledActions, showThoughtBubbles, …) |
+| Phase 3 — Workspace Status Interpreter | ✅ (heuristic) | `services/mood-interpreter.ts` `MoodInterpreter` — rule-based heuristics + 3 personalities; **no external LLM/API key** (deviation from original "LLM brain" idea) |
+| Phase 3 — Clean Robot Webview | ✅ Done | Three.js robot + toasts/thought-bubbles, VS Code theme colors, minimal chrome |
+| Phase 4 — Task 1 manifest | ✅ Done | `contributes.configuration` + views/commands/activationEvents |
+| Phase 4 — Task 2 DiagnosticWatcher | ✅ Done | inside `workspace-vibe-service.ts` (`onDidChangeDiagnostics`, ignores node_modules) |
+| Phase 4 — Task 3 LLM wrapper | ➡️ Replaced | `MoodInterpreter` is synchronous heuristic, not async LLM |
+| Phase 4 — Task 4 clean UI | ✅ Done | `webview-ui/src/app/` + `control-panel/` |
+| Phase 5 — team mood file | ⬜ Not built | (optional, deferred) |
+| Phase 5 — mood graph in output | ✅ Done | `MoodHistoryService.printSummary()` (mood-history-service.ts) + `showSessionSummary`/`showVibeStatus` commands |
+
+Extra shipped beyond this plan: **MCP server** (`mcp-server.ts`), **Cursor hook bridge** (`hooks/cursor-hook-bridge.ts`), **scene props** (place/pick-up/throw/tidy), **unfocused wind-down** (WindowFocusMonitor), **autopilot FSM**, and a **45-test suite**. See `docs/architecture-refactor.md` for the 2026-08-15 refactor.
+
+---

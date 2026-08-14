@@ -785,3 +785,20 @@ The robot contains a simple **Finite State Machine (FSM)** that governs its auto
 * **Engine:** Three.js (using `PerspectiveCamera`, `SoftShadowMap`, and `OrbitControls`).
 * **Geometries:** Utilizes `RoundedBoxGeometry` for a more premium, "beveled" look than standard cubes.
 * **Performance:** Implements a single `requestAnimationFrame` loop with delta-timing to ensure smooth animations regardless of screen refresh rates.
+
+---
+
+## ✅ STATUS UPDATE — 2026-08-15
+
+This standalone prototype evolved into the **VS Code extension webview** (React 18 + Three.js, Vite). Where the prototype lives today:
+
+* The entire scene/robot setup above was extracted into modules under `webview-ui/src/scene/` (`setupScene.ts`, `createRobotMesh.ts`) and driven by `webview-ui/src/app/RobotScene.ts` (a `RobotScene` class implementing `RobotSceneContext`).
+* The prototype's inline action/animation code became the **target-based action system** in `webview-ui/src/robot/actions/` (one file per action, `defineAction()` + dynamic props registry).
+* The prototype's AutoPilot FSM became `webview-ui/src/robot/autopilot.ts` (`updateAI(ctx, delta)`); interactions/cleanup live in `robot/interaction.ts`; the render loop is `render/render-loop.ts`.
+* The manual control overlay became the dev **Control Panel** webview (`webview-ui/src/control-panel/`).
+* The props system became `robot/scene-props.ts` (ground scene props) + `robot/actions/props.ts` (hand-held action props).
+* The ripple/knock interaction is preserved in `RobotScene`'s click handler.
+
+Full current layout: see `docs/architecture-refactor.md` and the `copilot-instructions.md` in `.github/`.
+
+---
