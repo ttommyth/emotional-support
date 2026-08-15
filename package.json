@@ -234,9 +234,62 @@
           "minimum": 3,
           "maximum": 30,
           "description": "How long (in seconds) thought bubbles stay visible before fading."
+        },
+        "emotional-support.agentActivity.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable robot reactions to the AI agent's actual activity (edits, tests, debugging, errors) detected without an MCP server."
+        },
+        "emotional-support.agentActivity.minIntervalMs": {
+          "type": "number",
+          "default": 6000,
+          "minimum": 1000,
+          "maximum": 60000,
+          "description": "Minimum time (ms) between agent-activity reactions from the same session."
+        },
+        "emotional-support.agentTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Register the 'emotionalSupport_react' language model tool so Copilot can explicitly signal its current task."
         }
       }
-    }
+    },
+    "languageModelTools": [
+      {
+        "name": "emotionalSupport_react",
+        "description": "Tell the Emotional Support robot what the coding agent is doing right now so it can react. Call at task milestones with a kind from: thinking, reading, searching, editing, testing, building, debugging, error, done, idle.",
+        "modelDescription": "Reaction signal for the Emotional Support robot companion. Call with a kind describing the agent's current activity (thinking, reading, searching, editing, testing, building, debugging, error, done, idle), plus optional detail (file/command/tool name), message (exact speech bubble text), severity (info/warning/error), and sessionId.",
+        "displayName": "Emotional Support Robot Reaction",
+        "tags": ["workspace"],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["thinking", "reading", "searching", "editing", "testing", "building", "debugging", "error", "done", "idle"],
+              "description": "What the agent is doing right now."
+            },
+            "detail": {
+              "type": "string",
+              "description": "Optional context: file name, command line, or tool name."
+            },
+            "message": {
+              "type": "string",
+              "description": "Optional exact message to show in the robot's speech bubble."
+            },
+            "severity": {
+              "type": "string",
+              "enum": ["info", "warning", "error"]
+            },
+            "sessionId": {
+              "type": "string",
+              "description": "Optional conversation id used for multi-session arbitration."
+            }
+          },
+          "required": ["kind"]
+        }
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

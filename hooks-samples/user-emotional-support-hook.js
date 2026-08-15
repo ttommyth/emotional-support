@@ -18,6 +18,17 @@ const HOOK_TO_MOOD = {
   afterAgentResponse: 'success'
 };
 
+// Normalized activity kind consumed by the extension's AgentActivity pipeline
+// (src/services/agent-activity.ts). Kept in sync with HOOK_TO_MOOD.
+const HOOK_TO_KIND = {
+  beforeReadFile: 'reading',
+  afterFileEdit: 'editing',
+  afterAgentThought: 'thinking',
+  beforeSubmitPrompt: 'thinking',
+  postToolUseFailure: 'error',
+  afterAgentResponse: 'done'
+};
+
 function readStdin() {
   return new Promise((resolve) => {
     let data = '';
@@ -80,12 +91,22 @@ async function main() {
 
   const eventName = typeof input?.hook_event_name === 'string' ? input.hook_event_name : '';
   const mood = HOOK_TO_MOOD[eventName];
+  const kind = HOOK_TO_KIND[eventName];
 
-  if (mood) {
+  if (mood && kind) {
+    const filePath = typeof input?.file_path === 'string' ? input.file_path : '';
+    const toolName = typeof input?.tool_name === 'string' ? input.tool_name : '';
+    const errorText = typeof input?.error_text === 'string' ? input.error_text : '';
+    const detail = filePath ? path.basename(filePath) : (toolName || undefined);
     const payload = {
       id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      kind,
       mood,
       message: makeMessage(eventName, input),
+      detail,
+      file_path: filePath || undefined,
+      tool_name: toolName || undefined,
+      error_text: errorText || undefined,
       hookEventName: eventName,
       updatedAt: new Date().toISOString(),
       conversation_id: typeof input?.conversation_id === 'string' ? input.conversation_id : undefined,

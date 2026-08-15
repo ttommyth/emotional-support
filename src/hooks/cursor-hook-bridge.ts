@@ -1,46 +1,55 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { PET_ACTIONS, type PetAction } from '../domain/actions';
-import type { PetMoodPayload } from '../services/pet-mood-service';
+import { isAgentActivityKind, type AgentActivityKind, type AgentActivityProvider, type AgentActivitySink } from '../services/agent-activity';
 
 const EVENT_FILENAME = 'emotional-support-event.json';
 const HOOKS_DIR = path.join('.cursor', 'hooks');
 const HOOKS_CONFIG = path.join('.cursor', 'hooks.json');
 
-const isPetAction = (value: string): value is PetAction => (PET_ACTIONS as readonly string[]).includes(value);
+/** Maps Cursor hook event names to normalized agent-activity kinds. */
+const HOOK_TO_KIND: Record<string, AgentActivityKind> = {
+	beforeReadFile: 'reading',
+	afterFileEdit: 'editing',
+	afterAgentThought: 'thinking',
+	beforeSubmitPrompt: 'thinking',
+	postToolUseFailure: 'error',
+	afterAgentResponse: 'done'
+};
 
 type CursorHookEvent = {
 	id?: string;
+	kind?: string;
 	mood?: string;
+	detail?: string;
 	message?: string;
 	durationSeconds?: number;
 	hookEventName?: string;
+	file_path?: string;
+	tool_name?: string;
+	error_text?: string;
+	severity?: string;
+	conversation_id?: string;
+	generation_id?: string;
 	updatedAt?: string;
 };
 
-export class CursorHookBridge implements vscode.Disposable {
+export class CursorHookBridge implements AgentActivityProvider {
+	readonly id = 'cursor-hooks';
+	private sink: AgentActivitySink | undefined;
 	private readonly watchers: fs.FSWatcher[] = [];
 	private readonly readTimers = new Map<string, NodeJS.Timeout>();
 	private lastEventId: string | undefined;
 
 	constructor(
 		private readonly workspaceRoots: readonly vscode.Uri[],
-		private readonly onMood: (payload: PetMoodPayload) => void,
 		// Additional directories to watch for events (e.g. extension globalStorage).
 		private readonly extraEventDirs: string[] = [],
 		private readonly output?: vscode.OutputChannel
-	) {
-		this.start();
-	}
+	) {}
 
-	public dispose() {
-		this.watchers.forEach((watcher) => watcher.close());
-		this.readTimers.forEach((timer) => clearTimeout(timer));
-		this.readTimers.clear();
-	}
-
-	private start() {
+	start(sink: AgentActivitySink) {
+		this.sink = sink;
 		// Watch per-workspace project hooks if present
 		this.workspaceRoots.forEach((root) => {
 			try {
@@ -86,6 +95,13 @@ export class CursorHookBridge implements vscode.Disposable {
 		});
 	}
 
+	dispose() {
+		this.watchers.forEach((watcher) => watcher.close());
+		this.readTimers.forEach((timer) => clearTimeout(timer));
+		this.readTimers.clear();
+		this.sink = undefined;
+	}
+
 	private scheduleRead(filePath: string) {
 		const existing = this.readTimers.get(filePath);
 		if (existing) {
@@ -112,19 +128,41 @@ export class CursorHookBridge implements vscode.Disposable {
 			if (parsed.id === this.lastEventId) {
 				return;
 			}
-			if (typeof parsed.mood !== 'string' || !isPetAction(parsed.mood)) {
+
+			const kind = this.toKind(parsed);
+			if (!kind) {
 				return;
 			}
 
 			this.lastEventId = parsed.id;
-			const payload: PetMoodPayload = {
-				mood: parsed.mood,
+			const detail = parsed.detail || (typeof parsed.file_path === 'string' && parsed.file_path
+				? path.basename(parsed.file_path)
+				: undefined);
+			const sessionId = [
+				'cursor',
+				parsed.conversation_id || parsed.id || 'unknown',
+				parsed.generation_id || '0'
+			].join(':');
+			this.sink?.({
+				sessionId,
+				kind,
+				detail,
 				message: typeof parsed.message === 'string' ? parsed.message : undefined,
-				durationSeconds: typeof parsed.durationSeconds === 'number' ? parsed.durationSeconds : undefined
-			};
-			this.onMood(payload);
+				severity: kind === 'error' ? 'error' : parsed.severity === 'warning' ? 'warning' : 'info',
+				timestamp: Date.now()
+			});
 		} catch {
 			return;
 		}
+	}
+
+	private toKind(ev: CursorHookEvent): AgentActivityKind | undefined {
+		if (typeof ev.kind === 'string' && isAgentActivityKind(ev.kind)) {
+			return ev.kind;
+		}
+		if (typeof ev.hookEventName === 'string') {
+			return HOOK_TO_KIND[ev.hookEventName];
+		}
+		return undefined;
 	}
 }

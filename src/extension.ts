@@ -14,6 +14,10 @@ import { registerCommands } from './commands';
 import { registerMcpServer } from './mcp-registration';
 import { PetViewProvider } from './webview/pet-view/PetViewProvider';
 import { PetControlViewProvider } from './webview/control-view/PetControlViewProvider';
+import { AgentReactionController, HeuristicAgentReactionDecider } from './agent-reactions';
+import { VscodeAgentActivityMonitor } from './services/agent-activity-monitor';
+import { CopilotToolProvider, COPILOT_TOOL_NAME } from './services/copilot-tool-provider';
+import type { AgentActivity } from './services/agent-activity';
 
 let outputChannel: vscode.OutputChannel | undefined;
 let activeMoodHistory: MoodHistoryService | undefined;
@@ -84,6 +88,9 @@ export function activate(context: vscode.ExtensionContext) {
 			if (e.affectsConfiguration('emotional-support')) {
 				petViewProvider.sendConfig();
 				vibeService.updateConfig(vibeReactions.updateConfig());
+				agentReactions.setEnabled(
+					vscode.workspace.getConfiguration('emotional-support').get<boolean>('agentActivity.enabled', true)
+				);
 			}
 		})
 	);
@@ -123,18 +130,47 @@ export function activate(context: vscode.ExtensionContext) {
 
 	moodService.start();
 
+	// ─── Agent Activity System (MCP-free) ───────────────────────────────
+	// The robot reacts to what the coding agent is actually doing. All
+	// providers (VS Code heuristics, the optional Copilot native tool, the
+	// Cursor hook bridge) emit normalized AgentActivity into ONE controller,
+	// which arbitrates between concurrent agent sessions and drives the pet.
+	const agentReactions = new AgentReactionController(
+		petViewProvider,
+		new HeuristicAgentReactionDecider(),
+		{
+			enabled: vscode.workspace.getConfiguration('emotional-support').get<boolean>('agentActivity.enabled', true),
+			minIntervalMs: vscode.workspace.getConfiguration('emotional-support').get<number>('agentActivity.minIntervalMs', 6000)
+		}
+	);
+	context.subscriptions.push(agentReactions);
+	const onAgentActivityEvent = (activity: AgentActivity) => agentReactions.handleActivity(activity);
+
+	// 1) Heuristic sensor — works in any VS Code-based IDE (Copilot, Cursor, …).
+	const agentActivityMonitor = new VscodeAgentActivityMonitor();
+	agentActivityMonitor.start(onAgentActivityEvent);
+	context.subscriptions.push(agentActivityMonitor);
+
+	// 2) Optional native Copilot tool (agent-callable, no MCP server).
+	if (vscode.workspace.getConfiguration('emotional-support').get<boolean>('agentTool.enabled', true)) {
+		const copilotToolProvider = new CopilotToolProvider();
+		copilotToolProvider.start(onAgentActivityEvent);
+		context.subscriptions.push(copilotToolProvider);
+		getOutputChannel().appendLine(`[AgentActivity] Registered Copilot tool '${COPILOT_TOOL_NAME}'.`);
+	}
+
 	const isCursor = vscode.env.appName.toLowerCase().includes('cursor');
 	if (isCursor) {
-		// Use a global storage directory for events so we don't need to write project-level hook files.
+		// 3) Cursor hook bridge — same pipeline, exact agent events.
 		const globalEventDir = path.join(context.globalStorageUri.fsPath, 'cursor-events');
 		const cursorHookBridge = new CursorHookBridge(
 			vscode.workspace.workspaceFolders?.map((folder) => folder.uri) ?? [],
-			(payload) => moodService.setPetMood(payload),
 			[globalEventDir],
 			getOutputChannel()
 		);
+		cursorHookBridge.start(onAgentActivityEvent);
 		context.subscriptions.push(cursorHookBridge);
-		getOutputChannel().appendLine('[CursorHookBridge] Enabled Cursor hook listener (watching global storage).');
+		getOutputChannel().appendLine('[AgentActivity] Cursor hook bridge enabled (watching global storage).');
 		getOutputChannel().appendLine(
 			`To avoid committing hook files to the project, place your Cursor hook script in your home hooks and have it write events to: ${globalEventDir}`
 		);

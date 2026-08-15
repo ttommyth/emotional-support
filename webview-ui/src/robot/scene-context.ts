@@ -100,7 +100,11 @@ export interface RobotSceneContext {
 
 	// ── Bubble positioning ──────────────────────────────────────────
 	bubbleScreenPosRef: { current: { x: number; y: number } };
+	/** Robot's own head position on screen — used by the filename callout to point at the object. */
+	objectScreenPosRef: { current: { x: number; y: number } };
 	bubbleContainerRef: { current: HTMLDivElement | null };
+	/** The filename callout element — positioned every frame by the render loop. */
+	calloutContainerRef: { current: HTMLDivElement | null };
 
 	// ── Tunables ────────────────────────────────────────────────────
 	BEND_DURATION: number;

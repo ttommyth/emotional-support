@@ -27,7 +27,7 @@ export type ExtensionToWebViewMessage =
 			showThoughtBubbles: boolean;
 			thoughtBubbleDuration: number;
 	  }
-	| { command: 'SET_MOOD'; mood: RobotActionName; message?: string; durationSeconds?: number; temperature?: number }
+	| { command: 'SET_MOOD'; mood: RobotActionName; message?: string; durationSeconds?: number; temperature?: number; bubble?: 'thought' | 'label' }
 	| { command: 'SET_AUTOPILOT'; enabled: boolean }
 	| { command: 'SET_TEMPERATURE'; temperature: number }
 	| { command: 'FORCE_MOVE'; target: 'front' | 'left' | 'right' }

@@ -121,11 +121,28 @@ export function animate(ctx: RobotSceneContext): void {
 
 	ctx.renderer.render(ctx.scene, ctx.camera);
 
-	// ─── Project robot head to screen space for thought bubble ───
+	// ─── Project to screen space (bubble + object anchors) ───
 	{
+		// Object anchor: the actual object the robot is working with — its prop
+		// (the book while reading, the laptop while editing). Track the prop's
+		// mesh so the label follows it even while it's being dropped/thrown,
+		// not just while held. Falls back to the robot's head when no prop is out.
+		const objPos = new Vector3();
+		const prop = ctx.props.get(ctx.currentAction);
+		if (prop && prop.state !== 'hidden') {
+			prop.mesh.getWorldPosition(objPos);
+		} else {
+			ctx.antennaBall.getWorldPosition(objPos);
+		}
+		const objProjected = objPos.clone().project(ctx.camera);
+		const ox = Math.max(0.1, Math.min(0.9, (objProjected.x + 1) / 2));
+		const oy = Math.max(0.05, Math.min(0.85, (1 - objProjected.y) / 2));
+		ctx.objectScreenPosRef.current.x = ox;
+		ctx.objectScreenPosRef.current.y = oy;
+
+		// Bubble anchor: robot head, offset above the antenna for the thought bubble.
 		const headWorldPos = new Vector3();
 		ctx.antennaBall.getWorldPosition(headWorldPos);
-		// Offset above the antenna
 		headWorldPos.y += 2.0;
 		const projected = headWorldPos.clone().project(ctx.camera);
 		// NDC (-1..1) to fraction (0..1), clamped to keep bubbles on-screen
@@ -137,6 +154,70 @@ export function animate(ctx: RobotSceneContext): void {
 		if (bEl) {
 			bEl.style.left = `${(sx * 100).toFixed(1)}%`;
 			bEl.style.top = `${(sy * 100).toFixed(1)}%`;
+		}
+
+		// Filename callout: position it every frame so it tracks the object it
+		// points at. The label sits at the object's top-left / top-right corner
+		// (whichever side has room) with a diagonal leader line to the object.
+		const cEl = ctx.calloutContainerRef.current;
+		if (cEl) {
+			const vw = window.innerWidth;
+			const vh = window.innerHeight;
+			const px = ox * vw;
+			const py = oy * vh;
+			const w = cEl.offsetWidth;
+			const h = cEl.offsetHeight;
+			const HG = 8; // horizontal gap from the object
+			const VG = 6; // vertical gap from the object
+
+			const side: 'left' | 'right' | 'center' =
+				px + HG + w <= vw ? 'right' : px - HG - w >= 0 ? 'left' : 'center';
+
+			let left: number;
+			let top: number;
+			let cornerX: number;
+			let cornerY: number;
+			if (side === 'right') {
+				left = px + HG;
+				top = py - h - VG;
+				cornerX = left;
+				cornerY = top + h;
+			} else if (side === 'left') {
+				left = px - HG - w;
+				top = py - h - VG;
+				cornerX = left + w;
+				cornerY = top + h;
+			} else {
+				left = Math.max(0, Math.min(px - w / 2, vw - w));
+				top = py - h - VG;
+				cornerX = px;
+				cornerY = py - h;
+			}
+
+			// Flip below the object when the label would clip the top edge.
+			if (top < 0) {
+				top = py + VG;
+				cornerX = side === 'right' ? px + HG : side === 'left' ? px - HG : px;
+				cornerY = top;
+			}
+			left = Math.max(0, Math.min(left, vw - w));
+
+			cEl.style.left = `${Math.round(left)}px`;
+			cEl.style.top = `${Math.round(top)}px`;
+			cEl.style.visibility = 'visible';
+
+			// Diagonal leader line from the label corner to the object point.
+			const line = cEl.querySelector('.activity-callout__line') as HTMLElement | null;
+			if (line) {
+				const dx = px - cornerX;
+				const dy = py - cornerY;
+				const len = Math.max(4, Math.hypot(dx, dy));
+				const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+				line.style.left = `${cornerX - left}px`;
+				line.style.top = `${cornerY - top}px`;
+				line.style.width = `${Math.round(len)}px`;
+				line.style.transform = `rotate(${angle.toFixed(1)}deg)`;
+			}
 		}
 	}
 }

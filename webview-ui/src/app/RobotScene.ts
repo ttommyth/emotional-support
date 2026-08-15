@@ -19,8 +19,14 @@ export type RobotSceneOptions = {
 	containerEl: HTMLElement;
 	vscode: { postMessage: (message: unknown) => void };
 	addToast: (text: string) => void;
+	/** Show a minimal filename callout (agent reading/editing) that points at the robot. */
+	setActivityLabel: (label: string, durationSeconds: number) => void;
 	bubbleScreenPosRef: { current: { x: number; y: number } };
+	/** Robot's own head position on screen — the callout's pointer target. */
+	objectScreenPosRef: { current: { x: number; y: number } };
 	bubbleContainerRef: { current: HTMLDivElement | null };
+	/** The filename callout element — positioned every frame by the render loop. */
+	calloutContainerRef: { current: HTMLDivElement | null };
 	showThoughtBubblesRef: { current: boolean };
 	thoughtBubbleDurationRef: { current: number };
 };
@@ -39,6 +45,7 @@ export class RobotScene implements RobotSceneContext, RobotSceneController {
 	private readonly containerEl: HTMLElement;
 	private readonly vscode: { postMessage: (message: unknown) => void };
 	private readonly addToast: (text: string) => void;
+	private readonly setActivityLabel: (label: string, durationSeconds: number) => void;
 	private readonly showThoughtBubblesRef: { current: boolean };
 	private readonly thoughtBubbleDurationRef: { current: number };
 	private readonly colors: RobotColors;
@@ -130,7 +137,9 @@ export class RobotScene implements RobotSceneContext, RobotSceneController {
 
 	// ── Bubble positioning ───────────────────────────────────────────
 	bubbleScreenPosRef: { current: { x: number; y: number } };
+	objectScreenPosRef: { current: { x: number; y: number } };
 	bubbleContainerRef: { current: HTMLDivElement | null };
+	calloutContainerRef: { current: HTMLDivElement | null };
 
 	// ── Tunables ─────────────────────────────────────────────────────
 	BEND_DURATION = 0.5;
@@ -160,10 +169,13 @@ export class RobotScene implements RobotSceneContext, RobotSceneController {
 		this.containerEl = opts.containerEl;
 		this.vscode = opts.vscode;
 		this.addToast = opts.addToast;
+		this.setActivityLabel = opts.setActivityLabel;
 		this.showThoughtBubblesRef = opts.showThoughtBubblesRef;
 		this.thoughtBubbleDurationRef = opts.thoughtBubbleDurationRef;
 		this.bubbleScreenPosRef = opts.bubbleScreenPosRef;
+		this.objectScreenPosRef = opts.objectScreenPosRef;
 		this.bubbleContainerRef = opts.bubbleContainerRef;
+		this.calloutContainerRef = opts.calloutContainerRef;
 
 		const setup = setupScene(opts.containerEl);
 		this.scene = setup.scene;
@@ -575,7 +587,12 @@ export class RobotScene implements RobotSceneContext, RobotSceneController {
 	setMood(message: SetMoodMessage) {
 		if (typeof message.mood === 'string' && this.isRobotAction(message.mood)) {
 			this.setRobotAction(message.mood);
-			if (typeof message.message === 'string' && message.message) {
+			if (message.bubble === 'label' && typeof message.message === 'string' && message.message) {
+				this.setActivityLabel(
+					message.message,
+					typeof message.durationSeconds === 'number' && message.durationSeconds > 0 ? message.durationSeconds : 4
+				);
+			} else if (typeof message.message === 'string' && message.message) {
 				this.addToast(message.message);
 			}
 			// Apply temperature if provided

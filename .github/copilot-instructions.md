@@ -82,6 +82,25 @@ The MCP server and extension communicate via JSON files in `globalStorageUri`:
 
 `RobotControlCommand` is a discriminated union on `type`: `'setMood' | 'setAutopilot' | 'forceMove' | 'setScene' | 'placeSceneProp' | 'removeSceneProp' | 'interactWithProp'`.
 
+### Agent Activity System (MCP-free)
+
+The robot also reacts to what the coding agent is *actually doing* — no MCP server required. All signal sources implement one interface — `AgentActivityProvider` in `src/services/agent-activity.ts` — and emit a normalized `AgentActivity` (`sessionId`, `kind`, `detail?`, `message?`, `severity?`, `timestamp`). The `AgentReactionController` (`src/agent-reactions.ts`) consumes them, arbitrates between concurrent agent sessions, and drives `PetViewProvider.setMood` / `placeSceneProp` (reusing the existing webview messages — no protocol changes).
+
+**Providers** (all feed the same controller):
+| Provider | File | Signals |
+|---|---|---|
+| `vscode-heuristics` | `src/services/agent-activity-monitor.ts` | burst edits, file create/delete/rename, terminal commands (test/build/debug), tasks, debug sessions, rapid doc opens (reading proxy), new diagnostics errors shortly after an edit |
+| `copilot-tool` | `src/services/copilot-tool-provider.ts` | `emotionalSupport_react` native `lm.registerTool` — the agent explicitly calls it (declare the tool in `contributes.languageModelTools`) |
+| `cursor-hooks` | `src/hooks/cursor-hook-bridge.ts` | Cursor hook events → kinds (`beforeReadFile`→reading, `afterFileEdit`→editing, `postToolUseFailure`→error, `afterAgentResponse`→done, …) |
+
+**Kinds**: `thinking` `reading` `searching` `editing` `testing` `building` `debugging` `error` `done` `idle`. `HeuristicAgentReactionDecider` maps kind → action/message/temperature. The decider is a swappable `AgentReactionDecider` — an LLM-backed implementation (e.g. Cactus Needle 2 as a local Python engine, or `vscode.lm`) can replace it later without touching the providers or controller.
+
+**Session arbitration**: `SessionActivityTracker` tracks sessions by `sessionId` (real conversation ids from Cursor/Copilot; synthetic `heuristic-<ts>` runs on the heuristic path). A recent `error` outranks everything; otherwise the most recently active session drives. Per-session rate limiting (`agentActivity.minIntervalMs`) plus immediate reaction on kind change keeps it lively without spamming.
+
+**Adding a new activity source**: implement `AgentActivityProvider` (`id` + `start(sink)`), then call `.start(onAgentActivity)` in `extension.ts`. That's it.
+
+**Settings**: `emotional-support.agentActivity.enabled`, `emotional-support.agentActivity.minIntervalMs`, `emotional-support.agentTool.enabled`.
+
 ### Action System
 
 Actions live in `webview-ui/src/robot/actions/`. Use `defineAction()` from `helpers.ts` for actions with props (it auto-wires the `heldUpdate` into the update loop). Plain actions can directly export a `RobotActionDefinition`.

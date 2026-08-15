@@ -98,7 +98,7 @@ export class PetViewProvider implements vscode.WebviewViewProvider {
 		};
 	}
 
-	public setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number; temperature?: number }) {
+	public setMood(payload: { mood: PetAction; message?: string; durationSeconds?: number; temperature?: number; bubble?: 'thought' | 'label' }) {
 		this.state.currentMood = payload.mood;
 		this.view?.webview.postMessage({ command: 'SET_MOOD', ...payload });
 		this.onStateChange?.(this.getState());
