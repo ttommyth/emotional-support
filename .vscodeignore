@@ -14,6 +14,7 @@ src/**
 .cursor/**
 .history/**
 .notes/**
+.opencode/**
 **/__tests__/**
 **/*.spec.*
 **/*.test.*

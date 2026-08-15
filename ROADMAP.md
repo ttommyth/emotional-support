@@ -2,7 +2,7 @@
 
 The current state, what's shipping soon, and where the project could go. Roadmap items are ideas, not commitments — they evolve with feedback and interest.
 
-**Current version:** 0.0.5 · **License:** MIT
+**Current version:** 0.0.6 · **License:** MIT
 
 ---
 
