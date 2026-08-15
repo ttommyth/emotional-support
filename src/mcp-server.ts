@@ -109,9 +109,9 @@ server.registerTool(
 			"Only one prop should have autoInteract: true.\n" +
 			`Available prop types: ${SCENE_PROP_TYPES.join(', ')}\n` +
 			`Available positions: ${SCENE_POSITIONS.join(', ')}\n` +
-			"Prop-to-action mapping: paper/book\u2192reading, laptop\u2192coding, magnifying_glass\u2192debugging, " +
-			"clipboard\u2192reviewing, wrench\u2192refactoring, test_tubes\u2192testing, lightbulb\u2192thinking. " +
-			"coffee_mug, star, trophy are decoration only.",
+			"All interactive prop types trigger the generic 'inspect' animation on pickup " +
+			"(paper, laptop, magnifying_glass, clipboard, wrench, test_tubes, lightbulb, book). " +
+			"coffee_mug, star, trophy are decoration only (no pickup interaction).",
 		inputSchema: {
 			props: z.array(z.object({
 				id: z.string().describe('Unique identifier — use a meaningful name like the filename (e.g., "utils.ts") or context (e.g., "bug-report")'),
@@ -154,12 +154,12 @@ server.registerTool(
 			"Place a single 3D prop on the ground near the robot.\n" +
 			"Use this for incremental scene building without replacing the full scene.\n" +
 			"If autoInteract is true, the robot will walk to the prop, bend down, pick it up, " +
-			"and begin the corresponding action (e.g., paper triggers reading).\n" +
+			"and begin the inspect action.\n" +
 			`Available prop types: ${SCENE_PROP_TYPES.join(', ')}\n` +
 			`Available positions: ${SCENE_POSITIONS.join(', ')}\n` +
-			"Prop-to-action mapping: paper/book\u2192reading, laptop\u2192coding, magnifying_glass\u2192debugging, " +
-			"clipboard\u2192reviewing, wrench\u2192refactoring, test_tubes\u2192testing, lightbulb\u2192thinking. " +
-			"coffee_mug, star, trophy are decoration only.",
+			"All interactive prop types trigger the generic 'inspect' animation on pickup " +
+			"(paper, laptop, magnifying_glass, clipboard, wrench, test_tubes, lightbulb, book). " +
+			"coffee_mug, star, trophy are decoration only (no pickup interaction).",
 		inputSchema: {
 			id: z.string().describe('Unique ID — use a meaningful name like the filename (e.g., "utils.ts") or context (e.g., "code-review")'),
 			type: z.enum(SCENE_PROP_TYPES).describe('Type of prop to place'),

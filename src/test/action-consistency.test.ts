@@ -7,7 +7,7 @@ import { PET_ACTIONS, SCENE_PROP_TYPES } from '../domain/actions';
  * Cross-build consistency guard.
  *
  * The extension host and webview are bundled separately and cannot share a
- * single source file, so the canonical vocabulary in `pet-mood-service.ts`
+ * single source file, so the canonical vocabulary in `src/domain/actions.ts`
  * (extension) is manually mirrored in `webview-ui/src/robot/types.ts`
  * (RobotActionName / ScenePropType). This guard fails if the two drift.
  *

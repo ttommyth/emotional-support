@@ -163,7 +163,7 @@ Scene props are 3D objects placed on the ground independently of the robot. They
 
 **Available scene prop types**: `paper`, `laptop`, `magnifying_glass`, `clipboard`, `wrench`, `test_tubes`, `lightbulb`, `book` (interactive), `coffee_mug`, `star`, `trophy` (decoration-only).
 
-**Prop-to-action mapping** (`SCENE_PROP_ACTION_MAP` in `types.ts`): interactive props trigger a robot action when picked up (e.g., `paper` → `reading`, `laptop` → `coding`).
+**Prop-to-action mapping** (`SCENE_PROP_ACTION_MAP` in `types.ts`): all interactive props (`paper`, `laptop`, `magnifying_glass`, `clipboard`, `wrench`, `test_tubes`, `lightbulb`, `book`) trigger the generic `inspect` action when picked up; `coffee_mug`, `star`, `trophy` are decoration-only (`null`).
 
 **Named positions** (`SCENE_POSITION_COORDS`): `left`, `center-left`, `center`, `center-right`, `right`.
 

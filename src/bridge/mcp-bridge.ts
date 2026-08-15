@@ -87,9 +87,10 @@ export class McpBridge {
 						return;
 					}
 					this.target.setMood({
-						mood: (payload as { mood: PetAction; message?: string; durationSeconds?: number }).mood,
+						mood: (payload as { mood: PetAction; message?: string; durationSeconds?: number; temperature?: number }).mood,
 						message: (payload as { message?: string }).message,
-						durationSeconds: (payload as { durationSeconds?: number }).durationSeconds
+						durationSeconds: (payload as { durationSeconds?: number }).durationSeconds,
+						temperature: (payload as { temperature?: number }).temperature
 					});
 					break;
 				}
