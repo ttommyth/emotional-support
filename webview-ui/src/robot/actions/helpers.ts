@@ -56,6 +56,12 @@ export const ANCHOR_PRESETS = {
 export type PropDefinition = {
 	/** Anchor point config (use ANCHOR_PRESETS or custom) */
 	anchor: AnchorConfig;
+	/**
+	 * Optionally parent the prop to the robot's hand so it moves with the arm
+	 * instead of floating at a fixed body point. When set, `anchor` is
+	 * interpreted relative to that arm group (the hand sits at (0,-2.2,0)).
+	 */
+	attachToArm?: 'left' | 'right';
 	/** Build the 3D mesh for this prop. Return the root Object3D. */
 	buildMesh: () => THREE.Object3D;
 	/**
@@ -72,12 +78,15 @@ export type PropDefinition = {
 export function createPropFromDefinition(
 	def: PropDefinition,
 	scene: THREE.Scene,
-	bodyPivot: THREE.Object3D
+	bodyPivot: THREE.Object3D,
+	arms?: { left: THREE.Object3D; right: THREE.Object3D }
 ): PropState {
 	const anchor = new THREE.Group();
 	anchor.position.set(...def.anchor.position);
 	anchor.rotation.set(...def.anchor.rotation);
-	bodyPivot.add(anchor);
+	// Hand-attached props ride along with the arm group so they follow the hand.
+	const parent = def.attachToArm && arms ? arms[def.attachToArm] : bodyPivot;
+	parent.add(anchor);
 
 	const mesh = def.buildMesh();
 	scene.add(mesh);

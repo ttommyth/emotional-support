@@ -204,7 +204,7 @@ export class RobotScene implements RobotSceneContext, RobotSceneController {
 		this.rightLeg = robotMesh.rightLeg;
 		this.antennaBall = robotMesh.antennaBall;
 
-		this.props = createRobotProps({ scene: this.scene, bodyPivot: this.bodyPivot }, actionPropDefs);
+		this.props = createRobotProps({ scene: this.scene, bodyPivot: this.bodyPivot, leftArm: robotMesh.leftArm, rightArm: robotMesh.rightArm }, actionPropDefs);
 
 		this.targets = {
 			body: { pos: new Vector3(), rot: new Vector3() },

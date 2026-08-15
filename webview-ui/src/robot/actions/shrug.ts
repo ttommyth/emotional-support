@@ -7,31 +7,25 @@ export const shrug: RobotActionDefinition = {
 	apply: (t, { targets }) => {
 		const phase = t % 3;
 		const smooth = (p: number) => p * p * (3 - 2 * p);
+		// Shoulder-up intensity 0..1: raise (1s), hold (1s), lower (1s)
+		let u: number;
 		if (phase < 1) {
-			const p = smooth(phase);
-			targets.leftArm.pos.y = 1.1 + p * 0.25;
-			targets.rightArm.pos.y = 1.1 + p * 0.25;
-			targets.leftArm.rot.set(-0.32, -0.25, -0.9 - p * 0.25);
-			targets.rightArm.rot.set(-0.32, 0.25, 0.9 + p * 0.25);
-			targets.head.rot.y = p * 0.2;
-			targets.head.rot.x = -0.05 * p;
+			u = smooth(phase);
 		} else if (phase < 2) {
-			const p = phase - 1;
-			const s = smooth(p);
-			targets.leftArm.pos.y = 1.35 + Math.sin(p * Math.PI) * 0.04;
-			targets.rightArm.pos.y = 1.35 + Math.sin(p * Math.PI) * 0.04;
-			targets.leftArm.rot.set(-0.35, -0.22, -0.95 + s * 0.12);
-			targets.rightArm.rot.set(-0.35, 0.22, 0.95 - s * 0.12);
-			targets.head.rot.y = 0.2 - s * 0.3;
-			targets.head.rot.x = -0.05 + Math.sin(p * Math.PI) * 0.03;
+			u = 1;
 		} else {
-			const p = smooth(phase - 2);
-			targets.leftArm.pos.y = 1.35 - p * 0.25;
-			targets.rightArm.pos.y = 1.35 - p * 0.25;
-			targets.leftArm.rot.set(-0.38, -0.2, -0.9 + p * 0.12);
-			targets.rightArm.rot.set(-0.38, 0.2, 0.9 - p * 0.12);
-			targets.head.rot.y = -0.1 + p * 0.1;
-			targets.head.rot.x = -0.02 * (1 - p);
+			u = 1 - smooth(phase - 2);
 		}
+
+		// Shoulders rise; arms hang with hands turned slightly out & forward
+		targets.leftArm.pos.y = 1.5 + u * 0.35;
+		targets.rightArm.pos.y = 1.5 + u * 0.35;
+		targets.leftArm.rot.set(-0.2 * u, 0.15 * u, -0.35 * u);
+		targets.rightArm.rot.set(-0.2 * u, -0.15 * u, 0.35 * u);
+
+		// Head: slight tilt, a touch of "well?"
+		targets.head.rot.x = -0.06 * u;
+		targets.head.rot.y = Math.sin(t * 0.7) * 0.05;
+		targets.head.rot.z = -Math.sin(t * 0.9) * 0.03;
 	}
 };

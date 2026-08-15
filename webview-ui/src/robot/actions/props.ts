@@ -30,6 +30,9 @@ export type RobotProps = {
 export type CreatePropsInput = {
 	scene: THREE.Scene;
 	bodyPivot: THREE.Object3D;
+	/** Arm groups — used when a prop is parented to a hand via `attachToArm`. */
+	leftArm: THREE.Object3D;
+	rightArm: THREE.Object3D;
 };
 
 /**
@@ -37,13 +40,13 @@ export type CreatePropsInput = {
  * The actionPropDefs map is auto-collected from actions that have a `prop` field.
  */
 export function createRobotProps(
-	{ scene, bodyPivot }: CreatePropsInput,
+	{ scene, bodyPivot, leftArm, rightArm }: CreatePropsInput,
 	actionPropDefs: Map<string, PropDefinition>
 ): RobotProps {
 	const items = new Map<string, import('./helpers').PropState>();
 
 	for (const [name, propDef] of actionPropDefs) {
-		items.set(name, createPropFromDefinition(propDef, scene, bodyPivot));
+		items.set(name, createPropFromDefinition(propDef, scene, bodyPivot, { left: leftArm, right: rightArm }));
 	}
 
 	const zParticles = createSleepParticles(scene);
